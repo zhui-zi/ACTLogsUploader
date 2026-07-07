@@ -66,4 +66,11 @@
     <Delete Files="@(LooseDep)" />
   </Target>
 
+  <!-- Copy the built DLL to a local deploy folder when PluginDeployPath is set
+       (define it in a local, gitignored Directory.Build.props). -->
+  <Target Name="DeployPlugin" AfterTargets="StripLooseDeps" Condition="'$(PluginDeployPath)' != ''">
+    <Copy SourceFiles="$(OutDir)$(AssemblyName).dll" DestinationFolder="$(PluginDeployPath)" ContinueOnError="WarnAndContinue" />
+    <Message Importance="high" Text="Deployed $(AssemblyName).dll -> $(PluginDeployPath)" />
+  </Target>
+
 </Project>

@@ -3,3 +3,4 @@ obj/
 .vs/
 *.user
 *.suo
+Directory.Build.props
