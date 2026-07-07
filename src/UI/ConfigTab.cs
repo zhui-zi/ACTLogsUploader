@@ -64,8 +64,10 @@ namespace ACTLogsUploader.UI
                 Relocalize();
             };
             _github = Btn("btn.github", (s, e) => OpenUrl(RepoUrl));
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            var versionLabel = new Label { Text = $"v{version.Major}.{version.Minor}.{version.Build}", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(8, 8, 3, 3) };
             var topRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
-            topRow.Controls.AddRange(new Control[] { _language, _github });
+            topRow.Controls.AddRange(new Control[] { _language, _github, versionLabel });
             AddRow("lbl.language", topRow);
 
             _target = Combo(200);

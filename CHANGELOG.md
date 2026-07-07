@@ -6,6 +6,7 @@ Versioning follows `MAJOR.MINOR.PATCH`. The release version is set by `<Version>
 ## Unreleased
 
 - Add auto-login and auto-upload (auto-start live logging on load).
+- Show the version on the plugin tab; include the version in the output DLL name.
 
 ## 0.1.1
 
