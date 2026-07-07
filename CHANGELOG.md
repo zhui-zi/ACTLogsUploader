@@ -3,6 +3,10 @@
 Versioning follows `MAJOR.MINOR.PATCH`. The release version is set by `<Version>` in
 `ACTLogsUploader.csproj` and tagged `vX.Y.Z`; each tag has a GitHub release with the built DLL.
 
+## Unreleased
+
+- Fix live-logging buttons not updating after auto-start.
+
 ## 0.2.0
 
 - Add auto-login and auto-upload (auto-start live logging on load).
