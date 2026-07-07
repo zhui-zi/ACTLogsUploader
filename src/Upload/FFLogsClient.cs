@@ -32,8 +32,8 @@ namespace ACTLogsUploader.Upload
     // ZIP master-table + segment uploads, terminate.
     public sealed class FFLogsClient : IDisposable
     {
-        // The server gates login on client version, rejecting old versions with 400
-        // ("下载 Archon App"). Must match a currently-shipping Archon App version.
+        // The server gates login on client version, rejecting old ones with a 400 that
+        // points users to the Archon App. Must match a currently-shipping Archon version.
         private const string CLIENT_VERSION = "9.3.119";
         private const int PARSER_VERSION = 2075;
         private const int MaxRetries = 3;

@@ -96,7 +96,7 @@ namespace ACTLogsUploader.Upload
         private async Task EnsureParserAsync()
         {
             Directory.CreateDirectory(CacheDir);
-            // Cache key includes host so 国服/国际服 parsers don't collide.
+            // Cache key includes host so the CN and Global parsers don't collide.
             var host = new Uri(_baseUrl).Host.Replace('.', '_');
             _parserBundlePath = Path.Combine(CacheDir, $"fflogs_parser_v8_v3_{host}.js");
 

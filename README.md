@@ -1,7 +1,7 @@
 # ACT Logs Uploader (FF Logs)
 
 An [Advanced Combat Tracker](https://advancedcombattracker.com/) plugin that uploads FFXIV
-combat logs to FF Logs — both `www.fflogs.com` (Global) and `cn.fflogs.com` (国服) — from
+combat logs to FF Logs — both `www.fflogs.com` (Global) and `cn.fflogs.com` (CN) — from
 inside ACT, without the Archon App.
 
 It speaks the FF Logs desktop-client protocol directly: email/password login, session cookie
@@ -34,7 +34,7 @@ the DLL → Add/Enable. No other files are needed. On first load the embedded na
 
 ## Use
 
-On the FFLogs Uploader tab (UI language: English or 中文, switchable at the top):
+On the FFLogs Uploader tab (UI language English or Chinese, switchable at the top):
 
 1. Target — Global (`fflogs.com`) or China (`cn.fflogs.com`).
 2. Email / Password — password is stored DPAPI-encrypted only if "Remember credentials" is on.
@@ -68,7 +68,7 @@ Auto actions run on a 6-hour timer and are off by default.
 - Login is gated on client version; the server rejects old versions. `CLIENT_VERSION` in
   `FFLogsClient.cs` tracks a current Archon App version and must be bumped when the server
   starts rejecting it.
-- 国服 support: `serverOrRegion` for create-report defaults to `1` for CN (undocumented); the
+- CN support: `serverOrRegion` for create-report defaults to `1` for CN (undocumented); the
   parser region code is `CN`. Adjust `PluginSettings.Region` if reports land in the wrong region.
 
 ## Disclaimer
