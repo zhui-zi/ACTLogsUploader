@@ -22,7 +22,7 @@ namespace ACTLogsUploader.UI
 
         private ComboBox _language, _target, _region, _visibility, _guild, _autoDelete;
         private TextBox _email, _password, _logFolder, _description, _log;
-        private CheckBox _remember, _uploadPrev, _autoArchive;
+        private CheckBox _remember, _autoLogin, _autoUpload, _uploadPrev, _autoArchive;
         private Button _save, _login, _upload, _uploadFile, _uploadSpecific, _startLive, _stopLive, _split, _archiveNow, _deleteArchived, _github;
         private readonly List<KeyValuePair<Label, string>> _rowLabels = new List<KeyValuePair<Label, string>>();
         private readonly List<string> _guildIds = new List<string>();
@@ -81,6 +81,12 @@ namespace ACTLogsUploader.UI
             _remember = new CheckBox { Text = Loc.T("chk.remember"), AutoSize = true };
             AddRow(null, _remember);
 
+            _autoLogin = new CheckBox { Text = Loc.T("chk.autoLogin"), AutoSize = true };
+            AddRow(null, _autoLogin);
+
+            _autoUpload = new CheckBox { Text = Loc.T("chk.autoUpload"), AutoSize = true };
+            AddRow(null, _autoUpload);
+
             _region = Combo(160);
             _region.Items.AddRange(RegionItems());
             AddRow("lbl.region", _region);
@@ -112,7 +118,7 @@ namespace ACTLogsUploader.UI
 
             var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
             _save = Btn("btn.save", (s, e) => { ApplyToSettings(); _settings.Save(); Log(Loc.T("st.settingsSaved")); });
-            _login = Btn("btn.login", async (s, e) => await Guarded(_login, async () => { ApplyToSettings(); _settings.Save(); if (await _plugin.LoginAsync()) RefreshGuilds(); }));
+            _login = Btn("btn.login", async (s, e) => await Guarded(_login, async () => { ApplyToSettings(); _settings.Save(); if (await _plugin.LoginAsync()) { RefreshGuilds(); _plugin.MaybeStartAutoUpload(); } }));
             _upload = Btn("btn.uploadLatest", async (s, e) => await Guarded(_upload, async () => { ApplyToSettings(); await _plugin.UploadLatestAsync(_description.Text); }));
             _uploadFile = Btn("btn.uploadFile", async (s, e) => await UploadPickedFile());
             _uploadSpecific = Btn("btn.uploadSpecific", async (s, e) => await UploadSpecificFights());
@@ -175,6 +181,8 @@ namespace ACTLogsUploader.UI
             _archiveNow.Text = Loc.T("btn.archiveNow");
             _deleteArchived.Text = Loc.T("btn.deleteArchived");
             _remember.Text = Loc.T("chk.remember");
+            _autoLogin.Text = Loc.T("chk.autoLogin");
+            _autoUpload.Text = Loc.T("chk.autoUpload");
             _uploadPrev.Text = Loc.T("chk.uploadPrev");
             _autoArchive.Text = Loc.T("chk.autoArchive");
             Repopulate(_target, TargetItems());
@@ -255,6 +263,8 @@ namespace ACTLogsUploader.UI
             _email.Text = _settings.Email;
             _password.Text = _settings.Password;
             _remember.Checked = _settings.RememberCredentials;
+            _autoLogin.Checked = _settings.AutoLogin;
+            _autoUpload.Checked = _settings.AutoUpload;
             _region.SelectedIndex = Math.Max(0, Array.IndexOf(RegionCodes, _settings.RegionCode));
             _visibility.SelectedIndex = Math.Min(Math.Max(0, _settings.Visibility), 2);
             _logFolder.Text = _settings.LogDirectory;
@@ -269,6 +279,8 @@ namespace ACTLogsUploader.UI
             _settings.Target = _target.SelectedIndex == 1 ? FFLogsTarget.China : FFLogsTarget.Global;
             _settings.Email = _email.Text.Trim();
             _settings.RememberCredentials = _remember.Checked;
+            _settings.AutoLogin = _autoLogin.Checked;
+            _settings.AutoUpload = _autoUpload.Checked;
             _settings.Password = _remember.Checked ? _password.Text : string.Empty;
 
             int ri = Math.Max(0, _region.SelectedIndex);
@@ -287,6 +299,12 @@ namespace ACTLogsUploader.UI
             int idx = _guild.SelectedIndex - 1; // 0 = Personal Logs
             if (idx >= 0 && idx < _guildIds.Count) return _guildIds[idx];
             return string.Empty;
+        }
+
+        public void OnLoggedIn()
+        {
+            RefreshGuilds();
+            UpdateLiveButtons();
         }
 
         private void RefreshGuilds()

@@ -37,6 +37,7 @@ namespace ACTLogsUploader
                 _configTab.Build(pluginScreenSpace);
                 _maintTimer = new System.Threading.Timer(_ => RunAutoMaintenance(), null, TimeSpan.FromMinutes(1), TimeSpan.FromHours(6));
                 SetStatus(Loc.T("st.ready", _settings.Target));
+                RunAutoStart();
             }
             catch (Exception ex)
             {
@@ -108,14 +109,44 @@ namespace ACTLogsUploader
             }
         }
 
-        public void StartLive(string description)
+        public void StartLive(string description) => StartLiveCore(description, _settings.UploadPreviousFights);
+
+        private void StartLiveCore(string description, bool uploadPreviousFights)
         {
             if (!EnsureLoggedIn()) return;
             var dir = ResolveLogDirectory();
             if (string.IsNullOrEmpty(dir)) { SetStatus(Loc.T("st.noLogFolder")); return; }
             _client.StartLiveLog(dir, _settings.Region, _settings.RegionCode, _settings.Visibility,
-                _settings.GuildId, description ?? "", _settings.UploadPreviousFights);
+                _settings.GuildId, description ?? "", uploadPreviousFights);
             SetStatus(Loc.T("st.liveStarted"));
+        }
+
+        // Auto-login on load (if enabled + credentials saved), then auto-start live logging.
+        private async void RunAutoStart()
+        {
+            try
+            {
+                if (_settings.AutoLogin)
+                {
+                    if (_settings.RememberCredentials && !string.IsNullOrWhiteSpace(_settings.Email) && !string.IsNullOrEmpty(_settings.Password))
+                    {
+                        if (await LoginAsync()) _configTab?.OnLoggedIn();
+                    }
+                    else
+                    {
+                        SetStatus(Loc.T("st.autoLoginSkipped"));
+                    }
+                }
+                MaybeStartAutoUpload();
+            }
+            catch (Exception ex) { PluginLog.Error("Auto-start failed", ex); }
+        }
+
+        // Start live logging automatically (new fights only) when auto-upload is on.
+        public void MaybeStartAutoUpload()
+        {
+            if (_settings.AutoUpload && _client != null && _client.IsLoggedIn && !_client.IsLiveLogging)
+                StartLiveCore("", false);
         }
 
         public void StopLive()

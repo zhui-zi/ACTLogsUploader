@@ -31,6 +31,8 @@ namespace ACTLogsUploader.Config
             ["btn.stopLive"] = new[] { "Stop live logging", "停止实时记录" },
             // checkboxes
             ["chk.remember"] = new[] { "Remember credentials (password stored DPAPI-encrypted)", "记住账号密码（密码经 DPAPI 加密存储）" },
+            ["chk.autoLogin"] = new[] { "Log in automatically on startup", "启动时自动登录" },
+            ["chk.autoUpload"] = new[] { "Start live logging automatically after login", "登录后自动开始实时记录" },
             ["chk.uploadPrev"] = new[] { "Include existing fights in the log when uploading / going live", "上传/实时时包含日志中已有的战斗" },
             // combo items
             ["target.global"] = new[] { "Global (fflogs.com)", "国际服 (fflogs.com)" },
@@ -56,6 +58,7 @@ namespace ACTLogsUploader.Config
             ["st.liveStarted"] = new[] { "Live logging started.", "实时上传已开始。" },
             ["st.liveStopping"] = new[] { "Live logging stopping...", "实时上传停止中..." },
             ["st.notLoggedIn"] = new[] { "Not logged in - click Login first.", "未登录，请先点击登录。" },
+            ["st.autoLoginSkipped"] = new[] { "Auto-login skipped: enable 'Remember credentials' and log in once.", "自动登录已跳过：请先勾选“记住账号密码”并手动登录一次。" },
             ["st.settingsSaved"] = new[] { "Settings saved.", "设置已保存。" },
             ["st.error"] = new[] { "Error: {0}", "出错：{0}" },
             ["st.parsing"] = new[] { "Parsing {0}...", "正在解析 {0}..." },

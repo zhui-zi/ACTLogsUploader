@@ -20,6 +20,12 @@ namespace ACTLogsUploader.Config
         public byte[] EncryptedPassword { get; set; }
         public bool RememberCredentials { get; set; } = true;
 
+        // Log in automatically on plugin load (needs saved credentials).
+        public bool AutoLogin { get; set; } = false;
+
+        // Start live logging automatically once logged in (new fights only).
+        public bool AutoUpload { get; set; } = false;
+
         // serverOrRegion for create-report. Global: NA=1, EU=2, JP=3, OC=6. CN value is
         // undocumented; defaults to 1.
         public int Region { get; set; } = 1;
