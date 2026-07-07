@@ -3,6 +3,11 @@
 Versioning follows `MAJOR.MINOR.PATCH`. The release version is set by `<Version>` in
 `ACTLogsUploader.csproj` and tagged `vX.Y.Z`; each tag has a GitHub release with the build output.
 
+## 0.3.0
+
+- Back to a single DLL: managed dependencies are IL-merged (so ACT's type discovery works),
+  and the native V8 + ICU data are embedded and loaded at runtime.
+
 ## 0.2.1
 
 - Fix plugin failing to enable on some ACT versions ("could not load System.Text.Json"):

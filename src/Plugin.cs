@@ -15,6 +15,8 @@ namespace ACTLogsUploader
 {
     public class Plugin : IActPluginV1
     {
+        static Plugin() => Bootstrap.Init();
+
         private Label _statusLabel;
         private PluginSettings _settings;
         private FFLogsClient _client;
