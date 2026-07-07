@@ -66,11 +66,4 @@
     <Delete Files="@(LooseDep)" />
   </Target>
 
-  <!-- Rename the output DLL to include the version (assembly identity stays ACTLogsUploader). -->
-  <Target Name="VersionOutput" AfterTargets="StripLooseDeps">
-    <Delete Files="$(OutDir)$(AssemblyName)-$(Version).dll" />
-    <Move SourceFiles="$(OutDir)$(AssemblyName).dll" DestinationFiles="$(OutDir)$(AssemblyName)-$(Version).dll" Condition="Exists('$(OutDir)$(AssemblyName).dll')" />
-    <Message Importance="high" Text="Output: $(AssemblyName)-$(Version).dll" />
-  </Target>
-
 </Project>
