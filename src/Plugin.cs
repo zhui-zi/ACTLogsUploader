@@ -99,9 +99,7 @@ namespace ACTLogsUploader
                 var code = await _client.UploadLogAsync(
                     logPath, _settings.Region, _settings.RegionCode, _settings.Visibility,
                     _settings.GuildId, description ?? "");
-                var url = $"{_settings.BaseUrl}/reports/{code}";
-                SetStatus(Loc.T("st.uploaded", url));
-                PluginLog.Info(url);
+                SetStatus(Loc.T("st.uploaded", $"{_settings.BaseUrl}/reports/{code}"));
             }
             catch (Exception ex)
             {
@@ -153,9 +151,7 @@ namespace ACTLogsUploader
             {
                 SetStatus(Loc.T("st.uploading", fileName));
                 var code = await _client.UploadPreparedAsync(fileName, selected, _settings.Region, _settings.Visibility, _settings.GuildId, description ?? "");
-                var url = $"{_settings.BaseUrl}/reports/{code}";
-                SetStatus(Loc.T("st.uploaded", url));
-                PluginLog.Info(url);
+                SetStatus(Loc.T("st.uploaded", $"{_settings.BaseUrl}/reports/{code}"));
             }
             catch (Exception ex)
             {
@@ -240,8 +236,8 @@ namespace ACTLogsUploader
 
         private void SetStatus(string text)
         {
-            // Show on the plugin's own tab, and on ACT's plugin-listing status label.
-            try { _configTab?.SetStatus(text); } catch { }
+            // Output to the tab's log box, and to ACT's plugin-listing status label.
+            PluginLog.Info(text);
             if (_statusLabel == null) return;
             try
             {

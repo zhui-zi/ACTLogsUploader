@@ -22,7 +22,6 @@ namespace ACTLogsUploader.Config
             ["lbl.logFolder"] = new[] { "Log folder", "日志文件夹" },
             ["lbl.description"] = new[] { "Description", "备注" },
             ["lbl.log"] = new[] { "Log", "日志" },
-            ["lbl.status"] = new[] { "Status", "状态" },
             // buttons
             ["btn.save"] = new[] { "Save", "保存" },
             ["btn.login"] = new[] { "Login", "登录" },

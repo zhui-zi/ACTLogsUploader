@@ -22,7 +22,6 @@ namespace ACTLogsUploader.UI
 
         private ComboBox _language, _target, _region, _visibility, _guild, _autoDelete;
         private TextBox _email, _password, _logFolder, _description, _log;
-        private Label _status;
         private CheckBox _remember, _uploadPrev, _realtime, _autoArchive;
         private Button _save, _login, _upload, _uploadFile, _uploadSpecific, _startLive, _stopLive, _split, _archiveNow, _deleteArchived, _github;
         private readonly List<KeyValuePair<Label, string>> _rowLabels = new List<KeyValuePair<Label, string>>();
@@ -140,10 +139,7 @@ namespace ACTLogsUploader.UI
             maintButtons.Controls.AddRange(new Control[] { _archiveNow, _deleteArchived });
             AddRow(null, maintButtons);
 
-            _status = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Font = new System.Drawing.Font(_language.Font, System.Drawing.FontStyle.Bold) };
-            AddRow("lbl.status", _status);
-
-            _log = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Height = 170, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top };
+            _log = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Height = 220, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top };
             AddRow("lbl.log", _log);
 
             tab.Controls.Add(root);
@@ -330,13 +326,6 @@ namespace ACTLogsUploader.UI
             try { await action(); }
             catch (Exception ex) { Log(Loc.T("st.error", ex.Message)); }
             finally { b.Enabled = true; UpdateLiveButtons(); }
-        }
-
-        public void SetStatus(string text)
-        {
-            if (_status == null || _status.IsDisposed) return;
-            if (_status.InvokeRequired) { _status.BeginInvoke((Action)(() => SetStatus(text))); return; }
-            _status.Text = text;
         }
 
         private void Log(string s) => PluginLog.Info(s);
