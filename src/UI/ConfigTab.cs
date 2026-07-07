@@ -26,6 +26,7 @@ namespace ACTLogsUploader.UI
         private Button _save, _login, _upload, _uploadFile, _uploadSpecific, _startLive, _stopLive, _split, _archiveNow, _deleteArchived, _github;
         private readonly List<KeyValuePair<Label, string>> _rowLabels = new List<KeyValuePair<Label, string>>();
         private readonly List<string> _guildIds = new List<string>();
+        private System.Windows.Forms.Timer _liveTimer;
 
         public ConfigTab(Plugin plugin, PluginSettings settings)
         {
@@ -152,6 +153,19 @@ namespace ACTLogsUploader.UI
 
             LoadFromSettings();
             PluginLog.Sink = AppendLog;
+
+            // Keep the live-logging buttons in sync with the actual state (auto-start,
+            // manual start/stop, and self-end all reflect here).
+            _liveTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+            _liveTimer.Tick += (s, e) => UpdateLiveButtons();
+            _liveTimer.Start();
+        }
+
+        public void Cleanup()
+        {
+            _liveTimer?.Stop();
+            _liveTimer?.Dispose();
+            _liveTimer = null;
         }
 
         private static ComboBox Combo(int width) => new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = width };
@@ -329,7 +343,9 @@ namespace ACTLogsUploader.UI
 
         private void UpdateLiveButtons()
         {
+            if (_startLive == null || _startLive.IsDisposed) return;
             bool live = _plugin.IsLiveLogging;
+            if (_startLive.Enabled == !live && _stopLive.Enabled == live) return;
             _startLive.Enabled = !live;
             _stopLive.Enabled = live;
         }

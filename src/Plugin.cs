@@ -51,6 +51,7 @@ namespace ACTLogsUploader
             try
             {
                 _settings?.Save();
+                _configTab?.Cleanup();
                 _maintTimer?.Dispose();
                 _maintTimer = null;
                 _client?.StopLiveLog();
