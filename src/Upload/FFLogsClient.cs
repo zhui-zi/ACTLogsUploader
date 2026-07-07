@@ -205,7 +205,7 @@ namespace ACTLogsUploader.Upload
                 int segmentId = i + 1;
                 var u = uploads[i];
                 await WithRetryAsync(() => UploadMasterTableAsync(reportCode, u.MasterTable, segmentId)).ConfigureAwait(false);
-                await WithRetryAsync(() => UploadSegmentAsync(reportCode, u.Fight, segmentId, u.FightStartTime, u.FightEndTime, false, false)).ConfigureAwait(false);
+                await WithRetryAsync(() => UploadSegmentAsync(reportCode, u.Fight, segmentId, u.FightStartTime, u.FightEndTime, false)).ConfigureAwait(false);
             }
             await TerminateReportAsync(reportCode).ConfigureAwait(false);
             PluginLog.Info($"Upload complete: {reportCode}");
@@ -220,7 +220,7 @@ namespace ACTLogsUploader.Upload
             return await UploadPreparedAsync(Path.GetFileName(logPath), uploads, serverOrRegion, visibility, guildId, description).ConfigureAwait(false);
         }
 
-        public void StartLiveLog(string logDirectory, int serverOrRegion, string regionCode, int visibility, string guildId, string description, bool uploadPreviousFights, bool realTime)
+        public void StartLiveLog(string logDirectory, int serverOrRegion, string regionCode, int visibility, string guildId, string description, bool uploadPreviousFights)
         {
             if (IsLiveLogging) { PluginLog.Warn("Live logging already in progress"); return; }
             _liveLogCts = new CancellationTokenSource();
@@ -242,8 +242,8 @@ namespace ACTLogsUploader.Upload
                                 CurrentReportCode = reportCode;
                                 _parser.SetReportCode(reportCode);
                             }
-                            await WithRetryAsync(() => UploadMasterTableAsync(reportCode, masterData, segmentId, realTime)).ConfigureAwait(false);
-                            await WithRetryAsync(() => UploadSegmentAsync(reportCode, fight, segmentId, startTime, endTime, true, realTime)).ConfigureAwait(false);
+                            await WithRetryAsync(() => UploadMasterTableAsync(reportCode, masterData, segmentId)).ConfigureAwait(false);
+                            await WithRetryAsync(() => UploadSegmentAsync(reportCode, fight, segmentId, startTime, endTime, true)).ConfigureAwait(false);
                             LiveFightCount++;
                         }, _liveLogCts.Token).ConfigureAwait(false);
                 }
@@ -335,7 +335,7 @@ namespace ACTLogsUploader.Upload
             }
         }
 
-        private async Task UploadMasterTableAsync(string reportCode, string masterTableContent, int segmentId, bool isRealTime = false)
+        private async Task UploadMasterTableAsync(string reportCode, string masterTableContent, int segmentId)
         {
             var zipBytes = ZipLogTxt(masterTableContent);
             var boundary = GenerateWebKitBoundary();
@@ -345,7 +345,7 @@ namespace ACTLogsUploader.Upload
                 content.Headers.Remove("Content-Type");
                 content.Headers.TryAddWithoutValidation("Content-Type", $"multipart/form-data; boundary={boundary}");
                 content.Add(CreateStringPart("segmentId", segmentId.ToString()));
-                content.Add(CreateStringPart("isRealTime", isRealTime.ToString().ToLower()));
+                content.Add(CreateStringPart("isRealTime", "false"));
                 content.Add(CreateFilePart("logfile", "blob", zipBytes));
 
                 using (var request = new HttpRequestMessage(HttpMethod.Post, $"/desktop-client/set-report-master-table/{reportCode}") { Content = content })
@@ -358,7 +358,7 @@ namespace ACTLogsUploader.Upload
             }
         }
 
-        private async Task UploadSegmentAsync(string reportCode, FightData fight, int segmentId, long startTime, long endTime, bool isLive, bool isRealTime)
+        private async Task UploadSegmentAsync(string reportCode, FightData fight, int segmentId, long startTime, long endTime, bool isLive)
         {
             var eventsContent = $"{fight.LogVersion}|{fight.GameVersion}\n{fight.EventCount}\n{fight.EventsString}";
             var zipBytes = ZipLogTxt(eventsContent);
@@ -369,7 +369,7 @@ namespace ACTLogsUploader.Upload
                 endTime,
                 mythic = 0,
                 isLiveLog = isLive,
-                isRealTime,
+                isRealTime = false,
                 inProgressEventCount = 0,
                 segmentId,
             });

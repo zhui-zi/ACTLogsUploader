@@ -64,7 +64,6 @@ namespace ACTLogsUploader.Config
             ["st.deletedArchived"] = new[] { "Deleted {0} archived log(s).", "已删除 {0} 个归档。" },
             ["st.split"] = new[] { "Split into {0} part(s).", "已拆分为 {0} 个文件。" },
             // new controls
-            ["chk.realtime"] = new[] { "Also upload fights while still in progress (for outside analysts)", "连进行中的战斗也上传（边打边传，供场外分析）" },
             ["btn.uploadSpecific"] = new[] { "Upload specific fights...", "上传指定战斗..." },
             ["btn.splitLog"] = new[] { "Split log...", "拆分日志..." },
             ["btn.github"] = new[] { "GitHub", "GitHub 项目页" },

@@ -22,7 +22,7 @@ namespace ACTLogsUploader.UI
 
         private ComboBox _language, _target, _region, _visibility, _guild, _autoDelete;
         private TextBox _email, _password, _logFolder, _description, _log;
-        private CheckBox _remember, _uploadPrev, _realtime, _autoArchive;
+        private CheckBox _remember, _uploadPrev, _autoArchive;
         private Button _save, _login, _upload, _uploadFile, _uploadSpecific, _startLive, _stopLive, _split, _archiveNow, _deleteArchived, _github;
         private readonly List<KeyValuePair<Label, string>> _rowLabels = new List<KeyValuePair<Label, string>>();
         private readonly List<string> _guildIds = new List<string>();
@@ -110,9 +110,6 @@ namespace ACTLogsUploader.UI
             _uploadPrev = new CheckBox { Text = Loc.T("chk.uploadPrev"), AutoSize = true };
             AddRow(null, _uploadPrev);
 
-            _realtime = new CheckBox { Text = Loc.T("chk.realtime"), AutoSize = true };
-            AddRow(null, _realtime);
-
             var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
             _save = Btn("btn.save", (s, e) => { ApplyToSettings(); _settings.Save(); Log(Loc.T("st.settingsSaved")); });
             _login = Btn("btn.login", async (s, e) => await Guarded(_login, async () => { ApplyToSettings(); _settings.Save(); if (await _plugin.LoginAsync()) RefreshGuilds(); }));
@@ -179,7 +176,6 @@ namespace ACTLogsUploader.UI
             _deleteArchived.Text = Loc.T("btn.deleteArchived");
             _remember.Text = Loc.T("chk.remember");
             _uploadPrev.Text = Loc.T("chk.uploadPrev");
-            _realtime.Text = Loc.T("chk.realtime");
             _autoArchive.Text = Loc.T("chk.autoArchive");
             Repopulate(_target, TargetItems());
             Repopulate(_region, RegionItems());
@@ -263,7 +259,6 @@ namespace ACTLogsUploader.UI
             _visibility.SelectedIndex = Math.Min(Math.Max(0, _settings.Visibility), 2);
             _logFolder.Text = _settings.LogDirectory;
             _uploadPrev.Checked = _settings.UploadPreviousFights;
-            _realtime.Checked = _settings.RealTimeUpload;
             _autoArchive.Checked = _settings.AutoArchive;
             _autoDelete.SelectedIndex = Math.Max(0, Array.IndexOf(DeleteDays, _settings.AutoDeleteArchivedDays));
         }
@@ -283,7 +278,6 @@ namespace ACTLogsUploader.UI
             _settings.GuildId = GetSelectedGuildId();
             _settings.LogDirectory = _logFolder.Text.Trim();
             _settings.UploadPreviousFights = _uploadPrev.Checked;
-            _settings.RealTimeUpload = _realtime.Checked;
             _settings.AutoArchive = _autoArchive.Checked;
             _settings.AutoDeleteArchivedDays = DeleteDays[Math.Max(0, _autoDelete.SelectedIndex)];
         }

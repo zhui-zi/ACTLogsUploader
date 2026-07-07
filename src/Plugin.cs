@@ -114,7 +114,7 @@ namespace ACTLogsUploader
             var dir = ResolveLogDirectory();
             if (string.IsNullOrEmpty(dir)) { SetStatus(Loc.T("st.noLogFolder")); return; }
             _client.StartLiveLog(dir, _settings.Region, _settings.RegionCode, _settings.Visibility,
-                _settings.GuildId, description ?? "", _settings.UploadPreviousFights, _settings.RealTimeUpload);
+                _settings.GuildId, description ?? "", _settings.UploadPreviousFights);
             SetStatus(Loc.T("st.liveStarted"));
         }
 

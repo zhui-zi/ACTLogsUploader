@@ -37,9 +37,6 @@ namespace ACTLogsUploader.Config
 
         public bool UploadPreviousFights { get; set; } = true;
 
-        // Upload each completed fight immediately during live logging (isRealTime flag).
-        public bool RealTimeUpload { get; set; } = false;
-
         // Zip logs untouched for more than AutoArchiveDays into an Archive folder.
         public bool AutoArchive { get; set; } = false;
         public int AutoArchiveDays { get; set; } = 3;

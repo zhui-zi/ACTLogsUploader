@@ -3,6 +3,11 @@
 Versioning follows `MAJOR.MINOR.PATCH`. The release version is set by `<Version>` in
 `ACTLogsUploader.csproj` and tagged `vX.Y.Z`; each tag has a GitHub release with the built DLL.
 
+## Unreleased
+
+- Remove the non-functional real-time (in-progress) upload option.
+- Clarify live-logging vs. real-time labels.
+
 ## 0.1.0
 
 - Upload FFXIV combat logs to FF Logs (Global `fflogs.com` and CN `cn.fflogs.com`).
