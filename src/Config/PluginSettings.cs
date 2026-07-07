@@ -20,10 +20,7 @@ namespace ACTLogsUploader.Config
         public byte[] EncryptedPassword { get; set; }
         public bool RememberCredentials { get; set; } = true;
 
-        // Log in automatically on plugin load (needs saved credentials).
         public bool AutoLogin { get; set; } = false;
-
-        // Start live logging automatically once logged in (new fights only).
         public bool AutoUpload { get; set; } = false;
 
         // serverOrRegion for create-report. Global: NA=1, EU=2, JP=3, OC=6. CN value is
@@ -43,11 +40,10 @@ namespace ACTLogsUploader.Config
 
         public bool UploadPreviousFights { get; set; } = true;
 
-        // Zip logs untouched for more than AutoArchiveDays into an Archive folder.
         public bool AutoArchive { get; set; } = false;
         public int AutoArchiveDays { get; set; } = 3;
 
-        // Delete archived zips older than this many days (0 = never).
+        // 0 = never.
         public int AutoDeleteArchivedDays { get; set; } = 0;
 
         [XmlIgnore]

@@ -4,7 +4,6 @@ using ACTLogsUploader.Config;
 
 namespace ACTLogsUploader.UI
 {
-    // Modal checklist for picking which fights to upload.
     internal sealed class FightPickerForm : Form
     {
         private readonly CheckedListBox _list;

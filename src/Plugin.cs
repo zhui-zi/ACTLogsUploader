@@ -156,7 +156,6 @@ namespace ACTLogsUploader
             SetStatus(Loc.T("st.liveStopping"));
         }
 
-        // Parse a log into its fights (no report created yet) for the fight picker.
         public async Task<List<ParserEngine.FightUpload>> PrepareAsync(string logPath)
         {
             if (!EnsureLoggedIn()) return null;
