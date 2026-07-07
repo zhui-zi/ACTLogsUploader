@@ -15,6 +15,7 @@ namespace ACTLogsUploader.UI
         private static readonly string[] RegionCodes = { "NA", "EU", "JP", "OC", "CN" };
         private static readonly int[] DeleteDays = { 0, 7, 14, 30, 60, 90 };
         private const long SplitPartBytes = 40L * 1024 * 1024;
+        private const string RepoUrl = "https://github.com/zhui-zi/ACTLogsUploader";
 
         private readonly Plugin _plugin;
         private readonly PluginSettings _settings;
@@ -22,7 +23,7 @@ namespace ACTLogsUploader.UI
         private ComboBox _language, _target, _region, _visibility, _guild, _autoDelete;
         private TextBox _email, _password, _logFolder, _description, _log;
         private CheckBox _remember, _uploadPrev, _realtime, _autoArchive;
-        private Button _save, _login, _upload, _uploadFile, _uploadSpecific, _startLive, _stopLive, _split, _archiveNow, _deleteArchived;
+        private Button _save, _login, _upload, _uploadFile, _uploadSpecific, _startLive, _stopLive, _split, _archiveNow, _deleteArchived, _github;
         private readonly List<KeyValuePair<Label, string>> _rowLabels = new List<KeyValuePair<Label, string>>();
         private readonly List<string> _guildIds = new List<string>();
 
@@ -62,7 +63,10 @@ namespace ACTLogsUploader.UI
                 _settings.Language = Loc.Current;
                 Relocalize();
             };
-            AddRow("lbl.language", _language);
+            _github = Btn("btn.github", (s, e) => OpenUrl(RepoUrl));
+            var topRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
+            topRow.Controls.AddRange(new Control[] { _language, _github });
+            AddRow("lbl.language", topRow);
 
             _target = Combo(200);
             _target.Items.AddRange(TargetItems());
@@ -170,6 +174,7 @@ namespace ACTLogsUploader.UI
             _startLive.Text = Loc.T("btn.startLive");
             _stopLive.Text = Loc.T("btn.stopLive");
             _split.Text = Loc.T("btn.splitLog");
+            _github.Text = Loc.T("btn.github");
             _archiveNow.Text = Loc.T("btn.archiveNow");
             _deleteArchived.Text = Loc.T("btn.deleteArchived");
             _remember.Text = Loc.T("chk.remember");
@@ -229,6 +234,12 @@ namespace ACTLogsUploader.UI
             var path = PickLogFile();
             if (path == null) return;
             await Guarded(_split, () => Task.Run(() => _plugin.SplitLog(path, SplitPartBytes)));
+        }
+
+        private void OpenUrl(string url)
+        {
+            try { System.Diagnostics.Process.Start(url); }
+            catch (Exception ex) { Log(Loc.T("st.error", ex.Message)); }
         }
 
         private string PickLogFile()

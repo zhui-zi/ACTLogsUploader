@@ -67,6 +67,7 @@ namespace ACTLogsUploader.Config
             ["chk.realtime"] = new[] { "Enable real-time uploading (upload each fight as it finishes)", "启用实时上传（每场战斗结束即上传）" },
             ["btn.uploadSpecific"] = new[] { "Upload specific fights...", "上传指定战斗..." },
             ["btn.splitLog"] = new[] { "Split log...", "拆分日志..." },
+            ["btn.github"] = new[] { "GitHub", "GitHub 项目页" },
             ["sec.maintenance"] = new[] { "Log archive / deletion", "日志归档 / 删除" },
             ["chk.autoArchive"] = new[] { "Automatically archive logs untouched for 3+ days", "自动归档超过 3 天未改动的日志" },
             ["lbl.autoDelete"] = new[] { "Auto-delete archived after", "自动删除归档（超过）" },
