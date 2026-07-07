@@ -58,6 +58,28 @@ namespace ACTLogsUploader.Config
             ["st.notLoggedIn"] = new[] { "Not logged in - click Login first.", "未登录，请先点击登录。" },
             ["st.settingsSaved"] = new[] { "Settings saved.", "设置已保存。" },
             ["st.error"] = new[] { "Error: {0}", "出错：{0}" },
+            ["st.parsing"] = new[] { "Parsing {0}...", "正在解析 {0}..." },
+            ["st.parsedFights"] = new[] { "Parsed {0} fight(s).", "已解析 {0} 场战斗。" },
+            ["st.archived"] = new[] { "Archived {0} log(s).", "已归档 {0} 个日志。" },
+            ["st.deletedArchived"] = new[] { "Deleted {0} archived log(s).", "已删除 {0} 个归档。" },
+            ["st.split"] = new[] { "Split into {0} part(s).", "已拆分为 {0} 个文件。" },
+            // new controls
+            ["chk.realtime"] = new[] { "Enable real-time uploading (upload each fight as it finishes)", "启用实时上传（每场战斗结束即上传）" },
+            ["btn.uploadSpecific"] = new[] { "Upload specific fights...", "上传指定战斗..." },
+            ["btn.splitLog"] = new[] { "Split log...", "拆分日志..." },
+            ["sec.maintenance"] = new[] { "Log archive / deletion", "日志归档 / 删除" },
+            ["chk.autoArchive"] = new[] { "Automatically archive logs untouched for 3+ days", "自动归档超过 3 天未改动的日志" },
+            ["lbl.autoDelete"] = new[] { "Auto-delete archived after", "自动删除归档（超过）" },
+            ["btn.archiveNow"] = new[] { "Archive logs", "归档日志" },
+            ["btn.deleteArchived"] = new[] { "Delete all archived", "删除全部归档" },
+            ["del.never"] = new[] { "Never", "从不" },
+            ["del.days"] = new[] { "{0} days", "{0} 天" },
+            // fight picker
+            ["fp.title"] = new[] { "Select fights to upload", "选择要上传的战斗" },
+            ["fp.upload"] = new[] { "Upload", "上传" },
+            ["fp.cancel"] = new[] { "Cancel", "取消" },
+            ["fp.all"] = new[] { "All", "全选" },
+            ["fp.none"] = new[] { "None", "全不选" },
         };
 
         public static string T(string key, params object[] args)

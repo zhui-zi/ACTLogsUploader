@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Advanced_Combat_Tracker;
 using ACTLogsUploader.Config;
 using ACTLogsUploader.Logging;
+using ACTLogsUploader.Maintenance;
 using ACTLogsUploader.UI;
 using ACTLogsUploader.Upload;
 
@@ -21,6 +24,7 @@ namespace ACTLogsUploader
         private PluginSettings _settings;
         private FFLogsClient _client;
         private ConfigTab _configTab;
+        private System.Threading.Timer _maintTimer;
 
         public void InitPlugin(TabPage pluginScreenSpace, Label pluginStatusText)
         {
@@ -31,6 +35,7 @@ namespace ACTLogsUploader
                 Loc.Current = _settings.Language;
                 _configTab = new ConfigTab(this, _settings);
                 _configTab.Build(pluginScreenSpace);
+                _maintTimer = new System.Threading.Timer(_ => RunAutoMaintenance(), null, TimeSpan.FromMinutes(1), TimeSpan.FromHours(6));
                 SetStatus(Loc.T("st.ready", _settings.Target));
             }
             catch (Exception ex)
@@ -45,6 +50,8 @@ namespace ACTLogsUploader
             try
             {
                 _settings?.Save();
+                _maintTimer?.Dispose();
+                _maintTimer = null;
                 _client?.StopLiveLog();
                 _client?.Dispose();
                 _client = null;
@@ -107,7 +114,7 @@ namespace ACTLogsUploader
             var dir = ResolveLogDirectory();
             if (string.IsNullOrEmpty(dir)) { SetStatus(Loc.T("st.noLogFolder")); return; }
             _client.StartLiveLog(dir, _settings.Region, _settings.RegionCode, _settings.Visibility,
-                _settings.GuildId, description ?? "", _settings.UploadPreviousFights);
+                _settings.GuildId, description ?? "", _settings.UploadPreviousFights, _settings.RealTimeUpload);
             SetStatus(Loc.T("st.liveStarted"));
         }
 
@@ -115,6 +122,77 @@ namespace ACTLogsUploader
         {
             _client?.StopLiveLog();
             SetStatus(Loc.T("st.liveStopping"));
+        }
+
+        // Parse a log into its fights (no report created yet) for the fight picker.
+        public async Task<List<ParserEngine.FightUpload>> PrepareAsync(string logPath)
+        {
+            if (!EnsureLoggedIn()) return null;
+            if (string.IsNullOrEmpty(logPath) || !File.Exists(logPath)) { SetStatus(Loc.T("st.logFileNotFound")); return null; }
+            try
+            {
+                SetStatus(Loc.T("st.parsing", Path.GetFileName(logPath)));
+                var list = await _client.PrepareUploadsAsync(logPath, _settings.RegionCode);
+                SetStatus(Loc.T("st.parsedFights", list.Count));
+                return list;
+            }
+            catch (Exception ex)
+            {
+                PluginLog.Error("Parse failed", ex);
+                SetStatus(Loc.T("st.uploadFailed", ex.Message));
+                return null;
+            }
+        }
+
+        public async Task UploadPreparedAsync(string fileName, IList<ParserEngine.FightUpload> selected, string description)
+        {
+            if (!EnsureLoggedIn() || selected == null || selected.Count == 0) return;
+            try
+            {
+                SetStatus(Loc.T("st.uploading", fileName));
+                var code = await _client.UploadPreparedAsync(fileName, selected, _settings.Region, _settings.Visibility, _settings.GuildId, description ?? "");
+                SetStatus(Loc.T("st.uploaded", $"{_settings.BaseUrl}/reports/{code}"));
+            }
+            catch (Exception ex)
+            {
+                PluginLog.Error("Upload failed", ex);
+                SetStatus(Loc.T("st.uploadFailed", ex.Message));
+            }
+        }
+
+        public void ArchiveNow()
+        {
+            var dir = ResolveLogDirectory();
+            if (string.IsNullOrEmpty(dir)) { SetStatus(Loc.T("st.noLogFolder")); return; }
+            int n = LogMaintenance.ArchiveOldLogs(dir, _settings.AutoArchiveDays);
+            SetStatus(Loc.T("st.archived", n));
+        }
+
+        public void DeleteArchivedNow()
+        {
+            var dir = ResolveLogDirectory();
+            if (string.IsNullOrEmpty(dir)) { SetStatus(Loc.T("st.noLogFolder")); return; }
+            int n = LogMaintenance.DeleteArchived(dir, 0);
+            SetStatus(Loc.T("st.deletedArchived", n));
+        }
+
+        public void SplitLog(string logPath, long maxBytes)
+        {
+            if (string.IsNullOrEmpty(logPath) || !File.Exists(logPath)) { SetStatus(Loc.T("st.logFileNotFound")); return; }
+            int n = LogMaintenance.SplitLog(logPath, maxBytes);
+            SetStatus(Loc.T("st.split", n));
+        }
+
+        private void RunAutoMaintenance()
+        {
+            try
+            {
+                var dir = ResolveLogDirectory();
+                if (string.IsNullOrEmpty(dir)) return;
+                if (_settings.AutoArchive) LogMaintenance.ArchiveOldLogs(dir, _settings.AutoArchiveDays);
+                if (_settings.AutoDeleteArchivedDays > 0) LogMaintenance.DeleteArchived(dir, _settings.AutoDeleteArchivedDays);
+            }
+            catch (Exception ex) { PluginLog.Warn("[Maint] " + ex.Message); }
         }
 
         // Explicit override, else ACT's current log directory, else the default ACT path.

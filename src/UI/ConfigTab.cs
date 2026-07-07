@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using ACTLogsUploader.Config;
 using ACTLogsUploader.Logging;
@@ -10,14 +13,16 @@ namespace ACTLogsUploader.UI
     {
         private static readonly int[] RegionServerOrRegion = { 1, 2, 3, 6, 1 };
         private static readonly string[] RegionCodes = { "NA", "EU", "JP", "OC", "CN" };
+        private static readonly int[] DeleteDays = { 0, 7, 14, 30, 60, 90 };
+        private const long SplitPartBytes = 40L * 1024 * 1024;
 
         private readonly Plugin _plugin;
         private readonly PluginSettings _settings;
 
-        private ComboBox _language, _target, _region, _visibility, _guild;
+        private ComboBox _language, _target, _region, _visibility, _guild, _autoDelete;
         private TextBox _email, _password, _logFolder, _description, _log;
-        private CheckBox _remember, _uploadPrev;
-        private Button _save, _login, _upload, _uploadFile, _startLive, _stopLive;
+        private CheckBox _remember, _uploadPrev, _realtime, _autoArchive;
+        private Button _save, _login, _upload, _uploadFile, _uploadSpecific, _startLive, _stopLive, _split, _archiveNow, _deleteArchived;
         private readonly List<KeyValuePair<Label, string>> _rowLabels = new List<KeyValuePair<Label, string>>();
         private readonly List<string> _guildIds = new List<string>();
 
@@ -33,14 +38,8 @@ namespace ACTLogsUploader.UI
             tab.SuspendLayout();
             tab.Text = "FFLogs Uploader";
 
-            var root = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 2,
-                Padding = new Padding(12),
-                AutoScroll = true,
-            };
-            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(12), AutoScroll = true };
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
             int row = 0;
@@ -55,7 +54,7 @@ namespace ACTLogsUploader.UI
                 row++;
             }
 
-            _language = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
+            _language = Combo(120);
             _language.Items.AddRange(new object[] { "English", "中文" });
             _language.SelectedIndexChanged += (s, e) =>
             {
@@ -65,7 +64,7 @@ namespace ACTLogsUploader.UI
             };
             AddRow("lbl.language", _language);
 
-            _target = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
+            _target = Combo(200);
             _target.Items.AddRange(TargetItems());
             AddRow("lbl.target", _target);
 
@@ -78,15 +77,15 @@ namespace ACTLogsUploader.UI
             _remember = new CheckBox { Text = Loc.T("chk.remember"), AutoSize = true };
             AddRow(null, _remember);
 
-            _region = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+            _region = Combo(160);
             _region.Items.AddRange(RegionItems());
             AddRow("lbl.region", _region);
 
-            _visibility = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+            _visibility = Combo(160);
             _visibility.Items.AddRange(VisItems());
             AddRow("lbl.visibility", _visibility);
 
-            _guild = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
+            _guild = Combo(240);
             _guild.Items.Add(Loc.T("guild.personal"));
             _guild.SelectedIndex = 0;
             AddRow("lbl.uploadTo", _guild);
@@ -107,23 +106,36 @@ namespace ACTLogsUploader.UI
             _uploadPrev = new CheckBox { Text = Loc.T("chk.uploadPrev"), AutoSize = true };
             AddRow(null, _uploadPrev);
 
+            _realtime = new CheckBox { Text = Loc.T("chk.realtime"), AutoSize = true };
+            AddRow(null, _realtime);
+
             var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
-            _save = new Button { Text = Loc.T("btn.save"), AutoSize = true };
-            _save.Click += (s, e) => { ApplyToSettings(); _settings.Save(); Log(Loc.T("st.settingsSaved")); };
-            _login = new Button { Text = Loc.T("btn.login"), AutoSize = true };
-            _login.Click += async (s, e) => await Guarded(_login, async () => { ApplyToSettings(); _settings.Save(); if (await _plugin.LoginAsync()) RefreshGuilds(); });
-            _upload = new Button { Text = Loc.T("btn.uploadLatest"), AutoSize = true };
-            _upload.Click += async (s, e) => await Guarded(_upload, async () => { ApplyToSettings(); await _plugin.UploadLatestAsync(_description.Text); });
-            _uploadFile = new Button { Text = Loc.T("btn.uploadFile"), AutoSize = true };
-            _uploadFile.Click += async (s, e) => await UploadPickedFile();
-            _startLive = new Button { Text = Loc.T("btn.startLive"), AutoSize = true };
-            _startLive.Click += (s, e) => { ApplyToSettings(); _plugin.StartLive(_description.Text); UpdateLiveButtons(); };
-            _stopLive = new Button { Text = Loc.T("btn.stopLive"), AutoSize = true, Enabled = false };
-            _stopLive.Click += (s, e) => { _plugin.StopLive(); UpdateLiveButtons(); };
-            buttons.Controls.AddRange(new Control[] { _save, _login, _upload, _uploadFile, _startLive, _stopLive });
+            _save = Btn("btn.save", (s, e) => { ApplyToSettings(); _settings.Save(); Log(Loc.T("st.settingsSaved")); });
+            _login = Btn("btn.login", async (s, e) => await Guarded(_login, async () => { ApplyToSettings(); _settings.Save(); if (await _plugin.LoginAsync()) RefreshGuilds(); }));
+            _upload = Btn("btn.uploadLatest", async (s, e) => await Guarded(_upload, async () => { ApplyToSettings(); await _plugin.UploadLatestAsync(_description.Text); }));
+            _uploadFile = Btn("btn.uploadFile", async (s, e) => await UploadPickedFile());
+            _uploadSpecific = Btn("btn.uploadSpecific", async (s, e) => await UploadSpecificFights());
+            _startLive = Btn("btn.startLive", (s, e) => { ApplyToSettings(); _plugin.StartLive(_description.Text); UpdateLiveButtons(); });
+            _stopLive = Btn("btn.stopLive", (s, e) => { _plugin.StopLive(); UpdateLiveButtons(); });
+            _stopLive.Enabled = false;
+            _split = Btn("btn.splitLog", async (s, e) => await SplitLogAction());
+            buttons.Controls.AddRange(new Control[] { _save, _login, _upload, _uploadFile, _uploadSpecific, _startLive, _stopLive, _split });
             AddRow(null, buttons);
 
-            _log = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Height = 180, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top };
+            _autoArchive = new CheckBox { Text = Loc.T("chk.autoArchive"), AutoSize = true };
+            AddRow("sec.maintenance", _autoArchive);
+
+            _autoDelete = Combo(160);
+            _autoDelete.Items.AddRange(DeleteItems());
+            AddRow("lbl.autoDelete", _autoDelete);
+
+            var maintButtons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
+            _archiveNow = Btn("btn.archiveNow", (s, e) => { ApplyToSettings(); _plugin.ArchiveNow(); });
+            _deleteArchived = Btn("btn.deleteArchived", (s, e) => { _plugin.DeleteArchivedNow(); });
+            maintButtons.Controls.AddRange(new Control[] { _archiveNow, _deleteArchived });
+            AddRow(null, maintButtons);
+
+            _log = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Height = 170, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top };
             AddRow("lbl.log", _log);
 
             tab.Controls.Add(root);
@@ -133,9 +145,19 @@ namespace ACTLogsUploader.UI
             PluginLog.Sink = AppendLog;
         }
 
+        private static ComboBox Combo(int width) => new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = width };
+
+        private static Button Btn(string key, EventHandler onClick)
+        {
+            var b = new Button { Text = Loc.T(key), AutoSize = true };
+            b.Click += onClick;
+            return b;
+        }
+
         private static object[] TargetItems() => new object[] { Loc.T("target.global"), Loc.T("target.china") };
         private static object[] RegionItems() => new object[] { "NA", "EU", "JP", "OC", Loc.T("region.cn") };
         private static object[] VisItems() => new object[] { Loc.T("vis.public"), Loc.T("vis.private"), Loc.T("vis.unlisted") };
+        private static object[] DeleteItems() => new object[] { Loc.T("del.never"), Loc.T("del.days", 7), Loc.T("del.days", 14), Loc.T("del.days", 30), Loc.T("del.days", 60), Loc.T("del.days", 90) };
 
         private void Relocalize()
         {
@@ -144,13 +166,20 @@ namespace ACTLogsUploader.UI
             _login.Text = Loc.T("btn.login");
             _upload.Text = Loc.T("btn.uploadLatest");
             _uploadFile.Text = Loc.T("btn.uploadFile");
+            _uploadSpecific.Text = Loc.T("btn.uploadSpecific");
             _startLive.Text = Loc.T("btn.startLive");
             _stopLive.Text = Loc.T("btn.stopLive");
+            _split.Text = Loc.T("btn.splitLog");
+            _archiveNow.Text = Loc.T("btn.archiveNow");
+            _deleteArchived.Text = Loc.T("btn.deleteArchived");
             _remember.Text = Loc.T("chk.remember");
             _uploadPrev.Text = Loc.T("chk.uploadPrev");
+            _realtime.Text = Loc.T("chk.realtime");
+            _autoArchive.Text = Loc.T("chk.autoArchive");
             Repopulate(_target, TargetItems());
             Repopulate(_region, RegionItems());
             Repopulate(_visibility, VisItems());
+            Repopulate(_autoDelete, DeleteItems());
             if (_guild.Items.Count > 0)
             {
                 int gi = _guild.SelectedIndex;
@@ -167,18 +196,49 @@ namespace ACTLogsUploader.UI
             if (idx >= 0 && idx < items.Length) combo.SelectedIndex = idx;
         }
 
-        private async System.Threading.Tasks.Task UploadPickedFile()
+        private async Task UploadPickedFile()
         {
             ApplyToSettings();
-            string path;
+            var path = PickLogFile();
+            if (path == null) return;
+            await Guarded(_uploadFile, () => _plugin.UploadFileAsync(path, _description.Text));
+        }
+
+        private async Task UploadSpecificFights()
+        {
+            ApplyToSettings();
+            var path = PickLogFile();
+            if (path == null) return;
+            await Guarded(_uploadSpecific, async () =>
+            {
+                var uploads = await _plugin.PrepareAsync(path);
+                if (uploads == null || uploads.Count == 0) return;
+                var labels = uploads.Select((u, i) => $"{i + 1}. {u.Fight.Name}").ToList();
+                using (var form = new FightPickerForm(labels))
+                {
+                    if (form.ShowDialog() != DialogResult.OK) return;
+                    var selected = form.SelectedIndices().Select(k => uploads[k]).ToList();
+                    if (selected.Count == 0) return;
+                    await _plugin.UploadPreparedAsync(Path.GetFileName(path), selected, _description.Text);
+                }
+            });
+        }
+
+        private async Task SplitLogAction()
+        {
+            var path = PickLogFile();
+            if (path == null) return;
+            await Guarded(_split, () => Task.Run(() => _plugin.SplitLog(path, SplitPartBytes)));
+        }
+
+        private string PickLogFile()
+        {
             using (var dlg = new OpenFileDialog { Filter = "FFXIV logs (Network_*.log)|Network_*.log|Log files (*.log)|*.log|All files (*.*)|*.*" })
             {
                 var dir = _plugin.ResolveLogDirectory();
                 if (!string.IsNullOrEmpty(dir)) dlg.InitialDirectory = dir;
-                if (dlg.ShowDialog() != DialogResult.OK) return;
-                path = dlg.FileName;
+                return dlg.ShowDialog() == DialogResult.OK ? dlg.FileName : null;
             }
-            await Guarded(_uploadFile, () => _plugin.UploadFileAsync(path, _description.Text));
         }
 
         private void LoadFromSettings()
@@ -192,6 +252,9 @@ namespace ACTLogsUploader.UI
             _visibility.SelectedIndex = Math.Min(Math.Max(0, _settings.Visibility), 2);
             _logFolder.Text = _settings.LogDirectory;
             _uploadPrev.Checked = _settings.UploadPreviousFights;
+            _realtime.Checked = _settings.RealTimeUpload;
+            _autoArchive.Checked = _settings.AutoArchive;
+            _autoDelete.SelectedIndex = Math.Max(0, Array.IndexOf(DeleteDays, _settings.AutoDeleteArchivedDays));
         }
 
         private void ApplyToSettings()
@@ -209,6 +272,9 @@ namespace ACTLogsUploader.UI
             _settings.GuildId = GetSelectedGuildId();
             _settings.LogDirectory = _logFolder.Text.Trim();
             _settings.UploadPreviousFights = _uploadPrev.Checked;
+            _settings.RealTimeUpload = _realtime.Checked;
+            _settings.AutoArchive = _autoArchive.Checked;
+            _settings.AutoDeleteArchivedDays = DeleteDays[Math.Max(0, _autoDelete.SelectedIndex)];
         }
 
         private string GetSelectedGuildId()
@@ -243,7 +309,7 @@ namespace ACTLogsUploader.UI
             _stopLive.Enabled = live;
         }
 
-        private async System.Threading.Tasks.Task Guarded(Button b, Func<System.Threading.Tasks.Task> action)
+        private async Task Guarded(Button b, Func<Task> action)
         {
             b.Enabled = false;
             try { await action(); }

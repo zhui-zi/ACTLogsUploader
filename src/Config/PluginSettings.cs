@@ -37,6 +37,16 @@ namespace ACTLogsUploader.Config
 
         public bool UploadPreviousFights { get; set; } = true;
 
+        // Upload each completed fight immediately during live logging (isRealTime flag).
+        public bool RealTimeUpload { get; set; } = false;
+
+        // Zip logs untouched for more than AutoArchiveDays into an Archive folder.
+        public bool AutoArchive { get; set; } = false;
+        public int AutoArchiveDays { get; set; } = 3;
+
+        // Delete archived zips older than this many days (0 = never).
+        public int AutoDeleteArchivedDays { get; set; } = 0;
+
         [XmlIgnore]
         public string BaseUrl => Target == FFLogsTarget.China
             ? "https://cn.fflogs.com"

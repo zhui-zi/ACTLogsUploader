@@ -45,9 +45,23 @@ On the FFLogs Uploader tab (UI language: English or 中文, switchable at the to
 7. Upload:
    - **Upload latest log** — the newest `Network_*.log` in the log folder.
    - **Upload file...** — pick a specific `.log` file.
-   - **Start live / Stop live** — upload fights as they finish.
+   - **Upload specific fights...** — pick a file, then choose which fights to upload.
+   - **Start live / Stop live** — upload fights as they finish. "Enable real-time uploading"
+     uploads each fight immediately; "Include existing fights" also uploads what's already
+     in the current file.
+   - **Split log...** — split a large log into ~40 MB parts (each keeps the setup lines).
 
 The log folder auto-detects from ACT's current log path; override it if needed.
+
+## Log archive / deletion
+
+Under the maintenance section:
+
+- **Automatically archive logs** — zips logs untouched for 3+ days into an `Archive` subfolder.
+- **Auto-delete archived after** — removes archived zips older than the selected range.
+- **Archive logs** / **Delete all archived** — run either action manually.
+
+Auto actions run on a 6-hour timer and are off by default.
 
 ## Notes
 

@@ -188,28 +188,39 @@ namespace ACTLogsUploader.Upload
             return CurrentReportCode ?? throw new Exception("No report code in response");
         }
 
-        public async Task<string> UploadLogAsync(string logPath, int serverOrRegion, string regionCode, int visibility, string guildId, string description)
+        // Parse a log into its fight list without creating a report (for the fight picker).
+        public Task<List<ParserEngine.FightUpload>> PrepareUploadsAsync(string logPath, string regionCode)
+            => _parser.ProcessLogAsync(logPath, "0000000000", regionCode);
+
+        // Create a report, upload the given fights, terminate. Segment ids are renumbered 1..N.
+        public async Task<string> UploadPreparedAsync(string fileName, IList<ParserEngine.FightUpload> uploads,
+            int serverOrRegion, int visibility, string guildId, string description)
         {
-            var reportCode = await CreateReportAsync(logPath, description, visibility, serverOrRegion, guildId).ConfigureAwait(false);
+            if (uploads == null || uploads.Count == 0)
+                throw new Exception("No fights to upload.");
 
-            var uploads = await _parser.ProcessLogAsync(logPath, reportCode, regionCode).ConfigureAwait(false);
-            if (uploads.Count == 0)
-                throw new Exception("Parser produced no fights - nothing to upload.");
-
+            var reportCode = await CreateReportAsync(fileName, description, visibility, serverOrRegion, guildId).ConfigureAwait(false);
             for (int i = 0; i < uploads.Count; i++)
             {
                 int segmentId = i + 1;
                 var u = uploads[i];
                 await WithRetryAsync(() => UploadMasterTableAsync(reportCode, u.MasterTable, segmentId)).ConfigureAwait(false);
-                await WithRetryAsync(() => UploadSegmentAsync(reportCode, u.Fight, segmentId, u.FightStartTime, u.FightEndTime, false)).ConfigureAwait(false);
+                await WithRetryAsync(() => UploadSegmentAsync(reportCode, u.Fight, segmentId, u.FightStartTime, u.FightEndTime, false, false)).ConfigureAwait(false);
             }
-
             await TerminateReportAsync(reportCode).ConfigureAwait(false);
             PluginLog.Info($"Upload complete: {reportCode}");
             return reportCode;
         }
 
-        public void StartLiveLog(string logDirectory, int serverOrRegion, string regionCode, int visibility, string guildId, string description, bool uploadPreviousFights)
+        public async Task<string> UploadLogAsync(string logPath, int serverOrRegion, string regionCode, int visibility, string guildId, string description)
+        {
+            var uploads = await PrepareUploadsAsync(logPath, regionCode).ConfigureAwait(false);
+            if (uploads.Count == 0)
+                throw new Exception("Parser produced no fights - nothing to upload.");
+            return await UploadPreparedAsync(Path.GetFileName(logPath), uploads, serverOrRegion, visibility, guildId, description).ConfigureAwait(false);
+        }
+
+        public void StartLiveLog(string logDirectory, int serverOrRegion, string regionCode, int visibility, string guildId, string description, bool uploadPreviousFights, bool realTime)
         {
             if (IsLiveLogging) { PluginLog.Warn("Live logging already in progress"); return; }
             _liveLogCts = new CancellationTokenSource();
@@ -231,8 +242,8 @@ namespace ACTLogsUploader.Upload
                                 CurrentReportCode = reportCode;
                                 _parser.SetReportCode(reportCode);
                             }
-                            await WithRetryAsync(() => UploadMasterTableAsync(reportCode, masterData, segmentId)).ConfigureAwait(false);
-                            await WithRetryAsync(() => UploadSegmentAsync(reportCode, fight, segmentId, startTime, endTime, true)).ConfigureAwait(false);
+                            await WithRetryAsync(() => UploadMasterTableAsync(reportCode, masterData, segmentId, realTime)).ConfigureAwait(false);
+                            await WithRetryAsync(() => UploadSegmentAsync(reportCode, fight, segmentId, startTime, endTime, true, realTime)).ConfigureAwait(false);
                             LiveFightCount++;
                         }, _liveLogCts.Token).ConfigureAwait(false);
                 }
@@ -347,7 +358,7 @@ namespace ACTLogsUploader.Upload
             }
         }
 
-        private async Task UploadSegmentAsync(string reportCode, FightData fight, int segmentId, long startTime, long endTime, bool isLive)
+        private async Task UploadSegmentAsync(string reportCode, FightData fight, int segmentId, long startTime, long endTime, bool isLive, bool isRealTime)
         {
             var eventsContent = $"{fight.LogVersion}|{fight.GameVersion}\n{fight.EventCount}\n{fight.EventsString}";
             var zipBytes = ZipLogTxt(eventsContent);
@@ -358,7 +369,7 @@ namespace ACTLogsUploader.Upload
                 endTime,
                 mythic = 0,
                 isLiveLog = isLive,
-                isRealTime = false,
+                isRealTime,
                 inProgressEventCount = 0,
                 segmentId,
             });
