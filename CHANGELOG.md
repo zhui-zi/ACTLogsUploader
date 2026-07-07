@@ -3,10 +3,9 @@
 Versioning follows `MAJOR.MINOR.PATCH`. The release version is set by `<Version>` in
 `ACTLogsUploader.csproj` and tagged `vX.Y.Z`; each tag has a GitHub release with the built DLL.
 
-## Unreleased
+## 0.1.1
 
-- Remove the non-functional real-time (in-progress) upload option.
-- Clarify live-logging vs. real-time labels.
+- Remove the non-functional real-time upload option; clarify labels.
 
 ## 0.1.0
 
