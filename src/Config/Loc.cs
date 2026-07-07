@@ -27,8 +27,8 @@ namespace ACTLogsUploader.Config
             ["btn.login"] = new[] { "Login", "登录" },
             ["btn.uploadLatest"] = new[] { "Upload latest log", "上传最新日志" },
             ["btn.uploadFile"] = new[] { "Upload file...", "上传指定文件..." },
-            ["btn.startLive"] = new[] { "Start live", "开始实时" },
-            ["btn.stopLive"] = new[] { "Stop live", "停止实时" },
+            ["btn.startLive"] = new[] { "Start live logging", "开始实时记录" },
+            ["btn.stopLive"] = new[] { "Stop live logging", "停止实时记录" },
             // checkboxes
             ["chk.remember"] = new[] { "Remember credentials (password stored DPAPI-encrypted)", "记住账号密码（密码经 DPAPI 加密存储）" },
             ["chk.uploadPrev"] = new[] { "Include existing fights in the log when uploading / going live", "上传/实时时包含日志中已有的战斗" },
@@ -64,7 +64,7 @@ namespace ACTLogsUploader.Config
             ["st.deletedArchived"] = new[] { "Deleted {0} archived log(s).", "已删除 {0} 个归档。" },
             ["st.split"] = new[] { "Split into {0} part(s).", "已拆分为 {0} 个文件。" },
             // new controls
-            ["chk.realtime"] = new[] { "Enable real-time uploading (upload each fight as it finishes)", "启用实时上传（每场战斗结束即上传）" },
+            ["chk.realtime"] = new[] { "Also upload fights while still in progress (for outside analysts)", "连进行中的战斗也上传（边打边传，供场外分析）" },
             ["btn.uploadSpecific"] = new[] { "Upload specific fights...", "上传指定战斗..." },
             ["btn.splitLog"] = new[] { "Split log...", "拆分日志..." },
             ["btn.github"] = new[] { "GitHub", "GitHub 项目页" },
