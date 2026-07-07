@@ -8,18 +8,17 @@ namespace ACTLogsUploader.UI
 {
     internal sealed class ConfigTab
     {
-        private static readonly string[] RegionNames = { "NA", "EU", "JP", "OC", "CN (国服)" };
         private static readonly int[] RegionServerOrRegion = { 1, 2, 3, 6, 1 };
         private static readonly string[] RegionCodes = { "NA", "EU", "JP", "OC", "CN" };
-        private static readonly string[] Visibilities = { "Public", "Private", "Unlisted" };
 
         private readonly Plugin _plugin;
         private readonly PluginSettings _settings;
 
-        private ComboBox _target, _region, _visibility, _guild;
+        private ComboBox _language, _target, _region, _visibility, _guild;
         private TextBox _email, _password, _logFolder, _description, _log;
         private CheckBox _remember, _uploadPrev;
-        private Button _login, _upload, _uploadFile, _startLive, _stopLive;
+        private Button _save, _login, _upload, _uploadFile, _startLive, _stopLive;
+        private readonly List<KeyValuePair<Label, string>> _rowLabels = new List<KeyValuePair<Label, string>>();
         private readonly List<string> _guildIds = new List<string>();
 
         public ConfigTab(Plugin plugin, PluginSettings settings)
@@ -30,6 +29,7 @@ namespace ACTLogsUploader.UI
 
         public void Build(TabPage tab)
         {
+            Loc.Current = _settings.Language;
             tab.SuspendLayout();
             tab.Text = "FFLogs Uploader";
 
@@ -44,40 +44,52 @@ namespace ACTLogsUploader.UI
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
             int row = 0;
-            void AddRow(string label, Control control)
+            void AddRow(string labelKey, Control control)
             {
-                root.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 8, 3, 3) }, 0, row);
+                var label = new Label { Text = labelKey == null ? "" : Loc.T(labelKey), AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 8, 3, 3) };
+                if (labelKey != null) _rowLabels.Add(new KeyValuePair<Label, string>(label, labelKey));
+                root.Controls.Add(label, 0, row);
                 control.Anchor = AnchorStyles.Left | AnchorStyles.Right;
                 control.Margin = new Padding(3, 5, 3, 3);
                 root.Controls.Add(control, 1, row);
                 row++;
             }
 
+            _language = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
+            _language.Items.AddRange(new object[] { "English", "中文" });
+            _language.SelectedIndexChanged += (s, e) =>
+            {
+                Loc.Current = _language.SelectedIndex == 1 ? Language.Chinese : Language.English;
+                _settings.Language = Loc.Current;
+                Relocalize();
+            };
+            AddRow("lbl.language", _language);
+
             _target = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
-            _target.Items.AddRange(new object[] { "Global (fflogs.com)", "China 国服 (cn.fflogs.com)" });
-            AddRow("Target", _target);
+            _target.Items.AddRange(TargetItems());
+            AddRow("lbl.target", _target);
 
             _email = new TextBox();
-            AddRow("Email", _email);
+            AddRow("lbl.email", _email);
 
             _password = new TextBox { UseSystemPasswordChar = true };
-            AddRow("Password", _password);
+            AddRow("lbl.password", _password);
 
-            _remember = new CheckBox { Text = "Remember credentials (password stored DPAPI-encrypted)", AutoSize = true };
-            AddRow("", _remember);
+            _remember = new CheckBox { Text = Loc.T("chk.remember"), AutoSize = true };
+            AddRow(null, _remember);
 
             _region = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
-            _region.Items.AddRange(RegionNames);
-            AddRow("Region", _region);
+            _region.Items.AddRange(RegionItems());
+            AddRow("lbl.region", _region);
 
             _visibility = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
-            _visibility.Items.AddRange(Visibilities);
-            AddRow("Visibility", _visibility);
+            _visibility.Items.AddRange(VisItems());
+            AddRow("lbl.visibility", _visibility);
 
             _guild = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
-            _guild.Items.Add("Personal Logs");
+            _guild.Items.Add(Loc.T("guild.personal"));
             _guild.SelectedIndex = 0;
-            AddRow("Upload to", _guild);
+            AddRow("lbl.uploadTo", _guild);
 
             var folderPanel = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
             folderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -87,38 +99,72 @@ namespace ACTLogsUploader.UI
             browse.Click += (s, e) => { using (var dlg = new FolderBrowserDialog()) { if (dlg.ShowDialog() == DialogResult.OK) _logFolder.Text = dlg.SelectedPath; } };
             folderPanel.Controls.Add(_logFolder, 0, 0);
             folderPanel.Controls.Add(browse, 1, 0);
-            AddRow("Log folder", folderPanel);
+            AddRow("lbl.logFolder", folderPanel);
 
             _description = new TextBox();
-            AddRow("Description", _description);
+            AddRow("lbl.description", _description);
 
-            _uploadPrev = new CheckBox { Text = "Include existing fights in the log when uploading / going live", AutoSize = true };
-            AddRow("", _uploadPrev);
+            _uploadPrev = new CheckBox { Text = Loc.T("chk.uploadPrev"), AutoSize = true };
+            AddRow(null, _uploadPrev);
 
             var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
-            var save = new Button { Text = "Save", AutoSize = true };
-            save.Click += (s, e) => { ApplyToSettings(); _settings.Save(); Log("Settings saved."); };
-            _login = new Button { Text = "Login", AutoSize = true };
+            _save = new Button { Text = Loc.T("btn.save"), AutoSize = true };
+            _save.Click += (s, e) => { ApplyToSettings(); _settings.Save(); Log(Loc.T("st.settingsSaved")); };
+            _login = new Button { Text = Loc.T("btn.login"), AutoSize = true };
             _login.Click += async (s, e) => await Guarded(_login, async () => { ApplyToSettings(); _settings.Save(); if (await _plugin.LoginAsync()) RefreshGuilds(); });
-            _upload = new Button { Text = "Upload latest log", AutoSize = true };
+            _upload = new Button { Text = Loc.T("btn.uploadLatest"), AutoSize = true };
             _upload.Click += async (s, e) => await Guarded(_upload, async () => { ApplyToSettings(); await _plugin.UploadLatestAsync(_description.Text); });
-            _uploadFile = new Button { Text = "Upload file...", AutoSize = true };
+            _uploadFile = new Button { Text = Loc.T("btn.uploadFile"), AutoSize = true };
             _uploadFile.Click += async (s, e) => await UploadPickedFile();
-            _startLive = new Button { Text = "Start live", AutoSize = true };
+            _startLive = new Button { Text = Loc.T("btn.startLive"), AutoSize = true };
             _startLive.Click += (s, e) => { ApplyToSettings(); _plugin.StartLive(_description.Text); UpdateLiveButtons(); };
-            _stopLive = new Button { Text = "Stop live", AutoSize = true, Enabled = false };
+            _stopLive = new Button { Text = Loc.T("btn.stopLive"), AutoSize = true, Enabled = false };
             _stopLive.Click += (s, e) => { _plugin.StopLive(); UpdateLiveButtons(); };
-            buttons.Controls.AddRange(new Control[] { save, _login, _upload, _uploadFile, _startLive, _stopLive });
-            AddRow("", buttons);
+            buttons.Controls.AddRange(new Control[] { _save, _login, _upload, _uploadFile, _startLive, _stopLive });
+            AddRow(null, buttons);
 
             _log = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Height = 180, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top };
-            AddRow("Log", _log);
+            AddRow("lbl.log", _log);
 
             tab.Controls.Add(root);
             tab.ResumeLayout(true);
 
             LoadFromSettings();
             PluginLog.Sink = AppendLog;
+        }
+
+        private static object[] TargetItems() => new object[] { Loc.T("target.global"), Loc.T("target.china") };
+        private static object[] RegionItems() => new object[] { "NA", "EU", "JP", "OC", Loc.T("region.cn") };
+        private static object[] VisItems() => new object[] { Loc.T("vis.public"), Loc.T("vis.private"), Loc.T("vis.unlisted") };
+
+        private void Relocalize()
+        {
+            foreach (var kv in _rowLabels) kv.Key.Text = Loc.T(kv.Value);
+            _save.Text = Loc.T("btn.save");
+            _login.Text = Loc.T("btn.login");
+            _upload.Text = Loc.T("btn.uploadLatest");
+            _uploadFile.Text = Loc.T("btn.uploadFile");
+            _startLive.Text = Loc.T("btn.startLive");
+            _stopLive.Text = Loc.T("btn.stopLive");
+            _remember.Text = Loc.T("chk.remember");
+            _uploadPrev.Text = Loc.T("chk.uploadPrev");
+            Repopulate(_target, TargetItems());
+            Repopulate(_region, RegionItems());
+            Repopulate(_visibility, VisItems());
+            if (_guild.Items.Count > 0)
+            {
+                int gi = _guild.SelectedIndex;
+                _guild.Items[0] = Loc.T("guild.personal");
+                _guild.SelectedIndex = gi;
+            }
+        }
+
+        private static void Repopulate(ComboBox combo, object[] items)
+        {
+            int idx = combo.SelectedIndex;
+            combo.Items.Clear();
+            combo.Items.AddRange(items);
+            if (idx >= 0 && idx < items.Length) combo.SelectedIndex = idx;
         }
 
         private async System.Threading.Tasks.Task UploadPickedFile()
@@ -137,18 +183,20 @@ namespace ACTLogsUploader.UI
 
         private void LoadFromSettings()
         {
+            _language.SelectedIndex = _settings.Language == Language.Chinese ? 1 : 0;
             _target.SelectedIndex = _settings.Target == FFLogsTarget.China ? 1 : 0;
             _email.Text = _settings.Email;
             _password.Text = _settings.Password;
             _remember.Checked = _settings.RememberCredentials;
             _region.SelectedIndex = Math.Max(0, Array.IndexOf(RegionCodes, _settings.RegionCode));
-            _visibility.SelectedIndex = Math.Min(Math.Max(0, _settings.Visibility), Visibilities.Length - 1);
+            _visibility.SelectedIndex = Math.Min(Math.Max(0, _settings.Visibility), 2);
             _logFolder.Text = _settings.LogDirectory;
             _uploadPrev.Checked = _settings.UploadPreviousFights;
         }
 
         private void ApplyToSettings()
         {
+            _settings.Language = Loc.Current;
             _settings.Target = _target.SelectedIndex == 1 ? FFLogsTarget.China : FFLogsTarget.Global;
             _settings.Email = _email.Text.Trim();
             _settings.RememberCredentials = _remember.Checked;
@@ -175,7 +223,7 @@ namespace ACTLogsUploader.UI
             if (_guild.InvokeRequired) { _guild.BeginInvoke((Action)RefreshGuilds); return; }
             _guild.Items.Clear();
             _guildIds.Clear();
-            _guild.Items.Add("Personal Logs");
+            _guild.Items.Add(Loc.T("guild.personal"));
             var client = _plugin.Client;
             if (client != null)
             {
@@ -199,7 +247,7 @@ namespace ACTLogsUploader.UI
         {
             b.Enabled = false;
             try { await action(); }
-            catch (Exception ex) { Log("Error: " + ex.Message); }
+            catch (Exception ex) { Log(Loc.T("st.error", ex.Message)); }
             finally { b.Enabled = true; UpdateLiveButtons(); }
         }
 

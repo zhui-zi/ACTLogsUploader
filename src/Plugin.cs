@@ -28,13 +28,14 @@ namespace ACTLogsUploader
             try
             {
                 _settings = PluginSettings.Load();
+                Loc.Current = _settings.Language;
                 _configTab = new ConfigTab(this, _settings);
                 _configTab.Build(pluginScreenSpace);
-                SetStatus($"Ready. Target={_settings.Target}. Not logged in.");
+                SetStatus(Loc.T("st.ready", _settings.Target));
             }
             catch (Exception ex)
             {
-                SetStatus("Init failed: " + ex.Message);
+                SetStatus(Loc.T("st.initFailed", ex.Message));
                 PluginLog.Error("InitPlugin failed", ex);
             }
         }
@@ -48,7 +49,7 @@ namespace ACTLogsUploader
                 _client?.Dispose();
                 _client = null;
                 PluginLog.Sink = null;
-                SetStatus("Unloaded.");
+                SetStatus(Loc.T("st.unloaded"));
             }
             catch (Exception ex)
             {
@@ -64,19 +65,19 @@ namespace ACTLogsUploader
             RecreateClientIfNeeded();
             if (string.IsNullOrWhiteSpace(_settings.Email) || string.IsNullOrEmpty(_settings.Password))
             {
-                SetStatus("Enter email and password first.");
+                SetStatus(Loc.T("st.enterCreds"));
                 return false;
             }
-            SetStatus("Logging in...");
+            SetStatus(Loc.T("st.loggingIn"));
             var ok = await _client.LoginAsync(_settings.Email, _settings.Password);
-            SetStatus(ok ? $"Logged in as {_client.Username} ({_settings.Target})." : "Login failed - see log.");
+            SetStatus(ok ? Loc.T("st.loggedInAs", _client.Username, _settings.Target) : Loc.T("st.loginFailed"));
             return ok;
         }
 
         public Task UploadLatestAsync(string description)
         {
             var dir = ResolveLogDirectory();
-            if (string.IsNullOrEmpty(dir)) { SetStatus("No FFXIVLogs folder found."); return Task.CompletedTask; }
+            if (string.IsNullOrEmpty(dir)) { SetStatus(Loc.T("st.noLogFolder")); return Task.CompletedTask; }
             var logPath = LogFileHelper.GetLatestLogFileFromPath(dir);
             return UploadFileAsync(logPath, description);
         }
@@ -84,19 +85,19 @@ namespace ACTLogsUploader
         public async Task UploadFileAsync(string logPath, string description)
         {
             if (!EnsureLoggedIn()) return;
-            if (string.IsNullOrEmpty(logPath) || !File.Exists(logPath)) { SetStatus("Log file not found."); return; }
+            if (string.IsNullOrEmpty(logPath) || !File.Exists(logPath)) { SetStatus(Loc.T("st.logFileNotFound")); return; }
             try
             {
-                SetStatus($"Uploading {Path.GetFileName(logPath)}...");
+                SetStatus(Loc.T("st.uploading", Path.GetFileName(logPath)));
                 var code = await _client.UploadLogAsync(
                     logPath, _settings.Region, _settings.RegionCode, _settings.Visibility,
                     _settings.GuildId, description ?? "");
-                SetStatus($"Uploaded: {_settings.BaseUrl}/reports/{code}");
+                SetStatus(Loc.T("st.uploaded", $"{_settings.BaseUrl}/reports/{code}"));
             }
             catch (Exception ex)
             {
                 PluginLog.Error("Upload failed", ex);
-                SetStatus("Upload failed: " + ex.Message);
+                SetStatus(Loc.T("st.uploadFailed", ex.Message));
             }
         }
 
@@ -104,16 +105,16 @@ namespace ACTLogsUploader
         {
             if (!EnsureLoggedIn()) return;
             var dir = ResolveLogDirectory();
-            if (string.IsNullOrEmpty(dir)) { SetStatus("No FFXIVLogs folder found."); return; }
+            if (string.IsNullOrEmpty(dir)) { SetStatus(Loc.T("st.noLogFolder")); return; }
             _client.StartLiveLog(dir, _settings.Region, _settings.RegionCode, _settings.Visibility,
                 _settings.GuildId, description ?? "", _settings.UploadPreviousFights);
-            SetStatus("Live logging started.");
+            SetStatus(Loc.T("st.liveStarted"));
         }
 
         public void StopLive()
         {
             _client?.StopLiveLog();
-            SetStatus("Live logging stopping...");
+            SetStatus(Loc.T("st.liveStopping"));
         }
 
         // Explicit override, else ACT's current log directory, else the default ACT path.
@@ -151,7 +152,7 @@ namespace ACTLogsUploader
         private bool EnsureLoggedIn()
         {
             if (_client != null && _client.IsLoggedIn) return true;
-            SetStatus("Not logged in - click Login first.");
+            SetStatus(Loc.T("st.notLoggedIn"));
             return false;
         }
 

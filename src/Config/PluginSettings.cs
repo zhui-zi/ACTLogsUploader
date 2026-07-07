@@ -14,6 +14,7 @@ namespace ACTLogsUploader.Config
     [Serializable]
     public sealed class PluginSettings
     {
+        public Language Language { get; set; } = Language.Chinese;
         public FFLogsTarget Target { get; set; } = FFLogsTarget.China;
         public string Email { get; set; } = string.Empty;
         public byte[] EncryptedPassword { get; set; }

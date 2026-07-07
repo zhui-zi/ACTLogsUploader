@@ -34,7 +34,7 @@ the DLL → Add/Enable. No other files are needed. On first load the embedded na
 
 ## Use
 
-On the FFLogs Uploader tab:
+On the FFLogs Uploader tab (UI language: English or 中文, switchable at the top):
 
 1. Target — Global (`fflogs.com`) or China (`cn.fflogs.com`).
 2. Email / Password — password is stored DPAPI-encrypted only if "Remember credentials" is on.
