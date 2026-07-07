@@ -1,10 +1,12 @@
 # Changelog
 
 Versioning follows `MAJOR.MINOR.PATCH`. The release version is set by `<Version>` in
-`ACTLogsUploader.csproj` and tagged `vX.Y.Z`; each tag has a GitHub release with the built DLL.
+`ACTLogsUploader.csproj` and tagged `vX.Y.Z`; each tag has a GitHub release with the build output.
 
-## Unreleased
+## 0.2.1
 
+- Fix plugin failing to enable on some ACT versions ("could not load System.Text.Json"):
+  ship dependencies as loose files next to the DLL instead of embedding them.
 - Fix live-logging buttons not updating after auto-start.
 
 ## 0.2.0

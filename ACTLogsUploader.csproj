@@ -14,7 +14,7 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Product>ACT Logs Uploader (FFLogs)</Product>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <ACTPath Condition="'$(ACTPath)' == ''">$(APPDATA)\Advanced Combat Tracker</ACTPath>
     <!-- The Diemoe repack ships the real assembly at DLibs\; standard ACT uses the .exe. -->
     <ACTAssembly Condition="'$(ACTAssembly)' == '' And Exists('$(ACTPath)\DLibs\Advanced Combat Tracker.dll')">$(ACTPath)\DLibs\Advanced Combat Tracker.dll</ACTAssembly>
@@ -42,35 +42,24 @@
     </PackageReference>
   </ItemGroup>
 
-  <!-- Single-DLL packaging: embed dependencies as resources (Bootstrap.cs resolves them),
-       then strip the loose copies so the output is one DLL. -->
+  <!-- The native V8 isn't copied to a class library's output by default; do it explicitly.
+       Managed dependencies are copy-local and land in the output on their own. -->
   <ItemGroup>
-    <EmbeddedResource Include="$(PkgMicrosoft_ClearScript_V8_Native_win-x64)\runtimes\win-x64\native\ClearScriptV8.win-x64.dll">
-      <LogicalName>embed/ClearScriptV8.win-x64.dll</LogicalName>
+    <None Include="$(PkgMicrosoft_ClearScript_V8_Native_win-x64)\runtimes\win-x64\native\ClearScriptV8.win-x64.dll">
+      <Link>ClearScriptV8.win-x64.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
-    </EmbeddedResource>
+    </None>
   </ItemGroup>
 
-  <Target Name="EmbedDeps" AfterTargets="ResolveAssemblyReferences" BeforeTargets="CoreCompile">
+  <!-- Copy the plugin DLL and all its dependencies to a local deploy folder when
+       PluginDeployPath is set (define it in a local, gitignored Directory.Build.props). -->
+  <Target Name="DeployPlugin" AfterTargets="Build" Condition="'$(PluginDeployPath)' != ''">
     <ItemGroup>
-      <EmbeddedResource Include="@(ReferenceCopyLocalPaths)" Condition="'%(Extension)' == '.dll'">
-        <LogicalName>embed/%(Filename)%(Extension)</LogicalName>
-      </EmbeddedResource>
+      <_DeployFiles Include="$(OutDir)*.dll" />
     </ItemGroup>
-  </Target>
-
-  <Target Name="StripLooseDeps" AfterTargets="Build">
-    <ItemGroup>
-      <LooseDep Include="$(OutDir)*.dll" Exclude="$(OutDir)$(AssemblyName).dll" />
-    </ItemGroup>
-    <Delete Files="@(LooseDep)" />
-  </Target>
-
-  <!-- Copy the built DLL to a local deploy folder when PluginDeployPath is set
-       (define it in a local, gitignored Directory.Build.props). -->
-  <Target Name="DeployPlugin" AfterTargets="StripLooseDeps" Condition="'$(PluginDeployPath)' != ''">
-    <Copy SourceFiles="$(OutDir)$(AssemblyName).dll" DestinationFolder="$(PluginDeployPath)" ContinueOnError="WarnAndContinue" />
-    <Message Importance="high" Text="Deployed $(AssemblyName).dll -> $(PluginDeployPath)" />
+    <Copy SourceFiles="@(_DeployFiles)" DestinationFolder="$(PluginDeployPath)" ContinueOnError="WarnAndContinue" />
+    <Message Importance="high" Text="Deployed plugin + dependencies -> $(PluginDeployPath)" />
   </Target>
 
 </Project>
