@@ -23,15 +23,15 @@ dotnet build -c Release -p:ACTPath="C:\path\to\Advanced Combat Tracker"
 
 - The Diemoe repack keeps the real ACT assembly at `DLibs\Advanced Combat Tracker.dll`; the
   project auto-detects it.
-- Building requires the ILRepack tool (`dotnet tool install -g dotnet-ilrepack`). The build
-  IL-merges the managed dependencies and embeds the native V8 + ICU data, producing a single
-  `bin\Release\ACTLogsUploader.dll` (~40 MB).
+- `bin\Release` contains `ACTLogsUploader.dll` plus its dependencies (ClearScript, the native
+  `ClearScriptV8.win-x64.dll`, System.Text.Json, etc.). They ship as loose, unmodified files —
+  embedding the native into a single DLL makes antivirus flag it, so it is kept separate.
 
 ## Install
 
-Copy `ACTLogsUploader.dll` anywhere, then in ACT: Plugins → Plugin Listing → Browse → select
-the DLL → Add/Enable. No other files are needed. On first load the embedded native V8 is
-extracted to `%TEMP%\ACTLogsUploader\native\`.
+Copy the whole `bin\Release` folder contents (or the release zip contents) into one folder,
+then in ACT: Plugins → Plugin Listing → Browse → select `ACTLogsUploader.dll` → Add/Enable.
+All the dependency DLLs must sit next to `ACTLogsUploader.dll`.
 
 ## Use
 
