@@ -14,7 +14,7 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Product>ACT Logs Uploader (FFLogs)</Product>
-    <Version>0.3.1</Version>
+    <Version>0.3.2</Version>
     <ACTPath Condition="'$(ACTPath)' == ''">$(APPDATA)\Advanced Combat Tracker</ACTPath>
     <!-- The Diemoe repack ships the real assembly at DLibs\; standard ACT uses the .exe. -->
     <ACTAssembly Condition="'$(ACTAssembly)' == '' And Exists('$(ACTPath)\DLibs\Advanced Combat Tracker.dll')">$(ACTPath)\DLibs\Advanced Combat Tracker.dll</ACTAssembly>
@@ -35,6 +35,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.ClearScript.V8" Version="7.5.0" />
     <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x64" Version="7.5.0" GeneratePathProperty="true" />
+    <PackageReference Include="Microsoft.ClearScript.V8.ICUData" Version="7.5.0" GeneratePathProperty="true" Condition="'$(SingleFile)' == 'true'" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3">
       <PrivateAssets>all</PrivateAssets>
@@ -42,10 +43,9 @@
     </PackageReference>
   </ItemGroup>
 
-  <!-- The native V8 isn't copied to a class library's output by default; do it explicitly.
-       Managed dependencies are copy-local and land in the output on their own. Everything
-       ships as loose, unmodified (Microsoft-signed) files so antivirus doesn't flag them. -->
-  <ItemGroup>
+  <!-- Default (loose) build: dependencies ship as loose, unmodified (signed) files so antivirus
+       doesn't flag them. The native V8 isn't copied for a class library, so do it explicitly. -->
+  <ItemGroup Condition="'$(SingleFile)' != 'true'">
     <None Include="$(PkgMicrosoft_ClearScript_V8_Native_win-x64)\runtimes\win-x64\native\ClearScriptV8.win-x64.dll">
       <Link>ClearScriptV8.win-x64.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -53,14 +53,47 @@
     </None>
   </ItemGroup>
 
-  <!-- Copy the plugin DLL and its dependencies to a local deploy folder when PluginDeployPath
-       is set (define it in a local, gitignored Directory.Build.props). -->
-  <Target Name="DeployPlugin" AfterTargets="Build" Condition="'$(PluginDeployPath)' != ''">
+  <Target Name="DeployPlugin" AfterTargets="Build" Condition="'$(PluginDeployPath)' != '' And '$(SingleFile)' != 'true'">
     <ItemGroup>
       <_DeployFiles Include="$(OutDir)*.dll" />
     </ItemGroup>
     <Copy SourceFiles="@(_DeployFiles)" DestinationFolder="$(PluginDeployPath)" ContinueOnError="WarnAndContinue" />
     <Message Importance="high" Text="Deployed plugin + dependencies -> $(PluginDeployPath)" />
+  </Target>
+
+  <!-- Single-file build (-p:SingleFile=true): embed the native V8 + ICU data, then IL-merge the
+       managed deps so the output is one DLL. Antivirus may flag the embedded native; the loose
+       build above avoids that. Requires: dotnet tool install -g dotnet-ilrepack -->
+  <PropertyGroup Condition="'$(SingleFile)' == 'true'">
+    <DefineConstants>$(DefineConstants);SINGLEFILE</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(SingleFile)' == 'true'">
+    <EmbeddedResource Include="$(PkgMicrosoft_ClearScript_V8_Native_win-x64)\runtimes\win-x64\native\ClearScriptV8.win-x64.dll">
+      <LogicalName>embed/ClearScriptV8.win-x64.dll</LogicalName>
+      <Visible>false</Visible>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(PkgMicrosoft_ClearScript_V8_ICUData)\lib\netstandard1.0\ClearScript.V8.ICUData.dll">
+      <LogicalName>embed/ClearScript.V8.ICUData.dll</LogicalName>
+      <Visible>false</Visible>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <Target Name="ILRepackSingle" AfterTargets="Build" Condition="'$(SingleFile)' == 'true'">
+    <PropertyGroup>
+      <_ILRepack>$(USERPROFILE)\.dotnet\tools\ilrepack.exe</_ILRepack>
+      <_TmpDir>$(IntermediateOutputPath)single\</_TmpDir>
+      <_Tmp>$(_TmpDir)$(AssemblyName).dll</_Tmp>
+      <_OutTrim>$(OutDir.TrimEnd('\'))</_OutTrim>
+    </PropertyGroup>
+    <MakeDir Directories="$(_TmpDir)" />
+    <ItemGroup>
+      <_Merge Include="$(OutDir)ClearScript.Core.dll;$(OutDir)ClearScript.V8.dll;$(OutDir)System.Text.Json.dll;$(OutDir)System.Text.Encodings.Web.dll;$(OutDir)System.Buffers.dll;$(OutDir)System.Memory.dll;$(OutDir)System.Numerics.Vectors.dll;$(OutDir)System.Runtime.CompilerServices.Unsafe.dll;$(OutDir)System.Threading.Tasks.Extensions.dll;$(OutDir)System.ValueTuple.dll;$(OutDir)Microsoft.Bcl.AsyncInterfaces.dll;$(OutDir)Newtonsoft.Json.dll" />
+    </ItemGroup>
+    <Exec Command="&quot;$(_ILRepack)&quot; /out:&quot;$(_Tmp)&quot; /lib:&quot;$(ACTPath)\DLibs&quot; /lib:&quot;$(_OutTrim)&quot; &quot;$(OutDir)$(AssemblyName).dll&quot; @(_Merge->'&quot;%(FullPath)&quot;', ' ')" />
+    <Move SourceFiles="$(_Tmp)" DestinationFiles="$(OutDir)$(AssemblyName).dll" OverwriteReadOnlyFiles="true" />
+    <Delete Files="@(_Merge);$(OutDir)ClearScript.V8.ICUData.dll;$(OutDir)ClearScriptV8.win-x64.dll" />
+    <Message Importance="high" Text="Single-file merge complete: $(AssemblyName).dll" />
   </Target>
 
 </Project>

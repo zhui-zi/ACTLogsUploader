@@ -4,3 +4,4 @@ obj/
 *.user
 *.suo
 Directory.Build.props
+dist/

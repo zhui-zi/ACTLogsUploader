@@ -3,6 +3,11 @@
 Versioning follows `MAJOR.MINOR.PATCH`. The release version is set by `<Version>` in
 `ACTLogsUploader.csproj` and tagged `vX.Y.Z`; each tag has a GitHub release with the build output.
 
+## 0.3.2
+
+- Offer both downloads: the loose-files zip (antivirus-safe, default) and the single DLL
+  (`-p:SingleFile=true`; antivirus may flag it, add an exclusion to use it).
+
 ## 0.3.1
 
 - Revert to loose dependency files. The single DLL from 0.3.0 embedded the native V8, which
