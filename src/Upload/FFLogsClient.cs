@@ -32,10 +32,9 @@ namespace ACTLogsUploader.Upload
     // ZIP master-table + segment uploads, terminate.
     public sealed class FFLogsClient : IDisposable
     {
-        // The server gates login on client version, rejecting old ones with a 400 that
+        // The server gates report creation on client version, rejecting old ones with a 400 that
         // points users to the Archon App. Match the upload-only Archon App Lite release.
         private const string CLIENT_VERSION = "9.4.36";
-        private const int PARSER_VERSION = 2075;
         private const int MaxRetries = 3;
 
         private readonly string _baseUrl;
@@ -152,13 +151,17 @@ namespace ACTLogsUploader.Upload
 
         public void Logout() => IsLoggedIn = false;
 
-        public async Task<string> CreateReportAsync(string filename, string description, int visibility, int serverOrRegion, string guildId)
+        public async Task<string> CreateReportAsync(string filename, string description, int visibility,
+            int serverOrRegion, string guildId, int parserVersion, int logMode)
         {
+            if (parserVersion <= 0)
+                throw new Exception("Parser version is unavailable.");
+
             var ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var payload = new Dictionary<string, object>
             {
                 ["clientVersion"] = CLIENT_VERSION,
-                ["parserVersion"] = PARSER_VERSION,
+                ["parserVersion"] = parserVersion,
                 ["startTime"] = ts,
                 ["endTime"] = ts,
                 ["guildId"] = string.IsNullOrEmpty(guildId) ? null : (object)int.Parse(guildId),
@@ -167,6 +170,7 @@ namespace ACTLogsUploader.Upload
                 ["visibility"] = visibility,
                 ["reportTagId"] = null,
                 ["description"] = description,
+                ["logMode"] = logMode,
             };
             var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
@@ -200,7 +204,8 @@ namespace ACTLogsUploader.Upload
             if (uploads == null || uploads.Count == 0)
                 throw new Exception("No fights to upload.");
 
-            var reportCode = await CreateReportAsync(fileName, description, visibility, serverOrRegion, guildId).ConfigureAwait(false);
+            var reportCode = await CreateReportAsync(fileName, description, visibility, serverOrRegion,
+                guildId, _parser.ParserVersion, 2).ConfigureAwait(false);
             for (int i = 0; i < uploads.Count; i++)
             {
                 int segmentId = i + 1;
@@ -241,7 +246,8 @@ namespace ACTLogsUploader.Upload
                         {
                             if (reportCode == null)
                             {
-                                reportCode = await CreateReportAsync("live.log", description, visibility, serverOrRegion, guildId).ConfigureAwait(false);
+                                reportCode = await CreateReportAsync("live.log", description, visibility,
+                                    serverOrRegion, guildId, liveParser.ParserVersion, 1).ConfigureAwait(false);
                                 CurrentReportCode = reportCode;
                                 liveParser.SetReportCode(reportCode);
                             }

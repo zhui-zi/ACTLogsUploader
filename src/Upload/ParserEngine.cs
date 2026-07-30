@@ -47,6 +47,8 @@ namespace ACTLogsUploader.Upload
         private readonly SemaphoreSlim _engineLock = new SemaphoreSlim(1, 1);
         private bool _disposed;
 
+        public int ParserVersion { get; private set; }
+
         public ParserEngine(HttpClient http, string baseUrl)
         {
             _http = http;
@@ -279,7 +281,15 @@ namespace ACTLogsUploader.Upload
             if (!(hasListener is true))
                 throw new Exception("Parser did not register a message listener — bundle may be invalid");
 
-            PluginLog.Info("V8 parser engine ready");
+            var versionResponses = SendMessageAndCollect(new { message = "get-parser-version" });
+            var versionResult = FindResponseByChannel(versionResponses, "get-parser-version-completed");
+            if (!versionResult.HasValue ||
+                versionResult.Value.ValueKind != JsonValueKind.Number ||
+                !versionResult.Value.TryGetInt32(out var parserVersion))
+                throw new Exception("Parser did not return a valid version");
+
+            ParserVersion = parserVersion;
+            PluginLog.Info($"V8 parser engine ready (parser version {ParserVersion})");
         }
 
         private void SendMessageCore(object message)
