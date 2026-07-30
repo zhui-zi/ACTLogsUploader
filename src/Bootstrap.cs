@@ -42,13 +42,12 @@ namespace ACTLogsUploader
             if (_done) return;
             _done = true;
             AppDomain.CurrentDomain.AssemblyResolve += Resolve;
-            SetupClearScript();
         }
 
-        // Keep ClearScript references out of Init so the JIT can run the resolver registration
-        // before it attempts to bind ClearScript.Core.
+        // Keep ClearScript references out of Init so ACT can instantiate the plugin before
+        // managed and native V8 dependencies are needed.
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void SetupClearScript()
+        public static void PrepareV8()
         {
             try
             {
@@ -112,9 +111,27 @@ namespace ACTLogsUploader
         {
             var assembly = typeof(Bootstrap).Assembly;
             var location = assembly.Location;
-            if (string.IsNullOrEmpty(location) && !string.IsNullOrEmpty(assembly.CodeBase))
-                location = new Uri(assembly.CodeBase).LocalPath;
-            return string.IsNullOrEmpty(location) ? null : Path.GetDirectoryName(location);
+            if (!string.IsNullOrEmpty(location))
+                return Path.GetDirectoryName(location);
+
+            // Some ACT builds load plugin bytes directly, leaving Location and CodeBase empty.
+            // Check the standard dedicated plugin folder relative to ACT's base/current folder.
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            var currentDir = Environment.CurrentDirectory;
+            var candidates = new[]
+            {
+                Path.Combine(baseDir, "Plugins", "ACTLogsUploader"),
+                baseDir,
+                Path.Combine(currentDir, "Plugins", "ACTLogsUploader"),
+                currentDir,
+            };
+            foreach (var candidate in candidates)
+            {
+                if (File.Exists(Path.Combine(candidate, "ACTLogsUploader.dll")) &&
+                    File.Exists(Path.Combine(candidate, "ClearScript.Core.dll")))
+                    return candidate;
+            }
+            return null;
         }
     }
 }

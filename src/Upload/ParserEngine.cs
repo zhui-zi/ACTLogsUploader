@@ -265,6 +265,7 @@ namespace ACTLogsUploader.Upload
             await EnsureParserAsync().ConfigureAwait(false);
             StopParser();
 
+            Bootstrap.PrepareV8();
             PluginLog.Info("Starting V8 parser engine...");
             _engine = new V8ScriptEngine();
             _engine.AddHostObject("__ipc", new IpcHost(this));
