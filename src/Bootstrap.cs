@@ -1,46 +1,89 @@
-#if SINGLEFILE
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace ACTLogsUploader
 {
-    // Single-file build only. Managed deps are IL-merged in; the native V8 and ICU data can't
-    // be, so they're embedded: ICU data (a managed assembly loaded by name) is resolved from the
-    // embedded copy, and the native lib is extracted to a temp folder that ClearScript's
-    // AuxiliarySearchPath points at. Both load at V8 init, after ACT has discovered the plugin.
+    // ACT can load plugins in a context that doesn't probe the plugin's own directory for
+    // dependencies. Register the resolver before ClearScript is first used.
     internal static class Bootstrap
     {
+#if SINGLEFILE
         private const string Prefix = "embed/";
         private const string Native = "ClearScriptV8.win-x64.dll";
         private const string IcuName = "ClearScript.V8.ICUData";
+        private static Assembly _icu;
+#else
+        private static readonly HashSet<string> ManagedDependencies =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "ClearScript.Core",
+                "ClearScript.V8",
+                "ClearScript.V8.ICUData",
+                "Microsoft.Bcl.AsyncInterfaces",
+                "Newtonsoft.Json",
+                "System.Buffers",
+                "System.Memory",
+                "System.Numerics.Vectors",
+                "System.Runtime.CompilerServices.Unsafe",
+                "System.Text.Encodings.Web",
+                "System.Text.Json",
+                "System.Threading.Tasks.Extensions",
+                "System.ValueTuple",
+            };
+#endif
 
         private static bool _done;
-        private static Assembly _icu;
 
         public static void Init()
         {
             if (_done) return;
             _done = true;
             AppDomain.CurrentDomain.AssemblyResolve += Resolve;
+            SetupClearScript();
+        }
+
+        // Keep ClearScript references out of Init so the JIT can run the resolver registration
+        // before it attempts to bind ClearScript.Core.
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void SetupClearScript()
+        {
             try
             {
+#if SINGLEFILE
                 Microsoft.ClearScript.HostSettings.AuxiliarySearchPath = ExtractNative();
+#else
+                var pluginDir = GetPluginDirectory();
+                if (!string.IsNullOrEmpty(pluginDir))
+                    Microsoft.ClearScript.HostSettings.AuxiliarySearchPath = pluginDir;
+#endif
             }
             catch (Exception ex)
             {
-                Logging.PluginLog.Error("V8 native setup failed", ex);
+                Logging.PluginLog.Error("Dependency setup failed", ex);
             }
         }
 
         private static Assembly Resolve(object sender, ResolveEventArgs args)
         {
-            if (new AssemblyName(args.Name).Name != IcuName) return null;
+            var name = new AssemblyName(args.Name).Name;
+#if SINGLEFILE
+            if (name != IcuName) return null;
             if (_icu != null) return _icu;
             var bytes = ReadEmbedded(Prefix + IcuName + ".dll");
             return _icu = bytes != null ? Assembly.Load(bytes) : null;
+#else
+            if (!ManagedDependencies.Contains(name)) return null;
+            var pluginDir = GetPluginDirectory();
+            if (string.IsNullOrEmpty(pluginDir)) return null;
+            var path = Path.Combine(pluginDir, name + ".dll");
+            return File.Exists(path) ? Assembly.LoadFrom(path) : null;
+#endif
         }
 
+#if SINGLEFILE
         private static string ExtractNative()
         {
             var dir = Path.Combine(Path.GetTempPath(), "ACTLogsUploader", "native");
@@ -63,6 +106,15 @@ namespace ACTLogsUploader
                 return b;
             }
         }
+#endif
+
+        private static string GetPluginDirectory()
+        {
+            var assembly = typeof(Bootstrap).Assembly;
+            var location = assembly.Location;
+            if (string.IsNullOrEmpty(location) && !string.IsNullOrEmpty(assembly.CodeBase))
+                location = new Uri(assembly.CodeBase).LocalPath;
+            return string.IsNullOrEmpty(location) ? null : Path.GetDirectoryName(location);
+        }
     }
 }
-#endif
