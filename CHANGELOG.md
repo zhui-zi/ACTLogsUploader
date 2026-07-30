@@ -3,6 +3,12 @@
 Versioning follows `MAJOR.MINOR.PATCH`. The release version is set by `<Version>` in
 `ACTLogsUploader.csproj` and tagged `vX.Y.Z`; each tag has a GitHub release with the build output.
 
+## 0.3.3
+
+- Resolve ClearScript dependencies when ACT loads the plugin assembly from memory.
+- Match Archon App Lite 9.4.36 and query the parser version at runtime.
+- Isolate live logging from manual parsing and send the current upload mode.
+
 ## 0.3.2
 
 - Offer both downloads: the loose-files zip (antivirus-safe, default) and the single DLL
