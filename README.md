@@ -67,7 +67,7 @@ Auto actions run on a 6-hour timer and are off by default.
 ## Notes
 
 - Login is gated on client version; the server rejects old versions. `CLIENT_VERSION` in
-  `FFLogsClient.cs` tracks a current Archon App version and must be bumped when the server
+  `FFLogsClient.cs` tracks the current Archon App Lite version and must be bumped when the server
   starts rejecting it.
 - CN support: `serverOrRegion` for create-report defaults to `1` for CN (undocumented); the
   parser region code is `CN`. Adjust `PluginSettings.Region` if reports land in the wrong region.

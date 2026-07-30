@@ -33,14 +33,15 @@ namespace ACTLogsUploader.Upload
     public sealed class FFLogsClient : IDisposable
     {
         // The server gates login on client version, rejecting old ones with a 400 that
-        // points users to the Archon App. Must match a currently-shipping Archon version.
-        private const string CLIENT_VERSION = "9.3.119";
+        // points users to the Archon App. Match the upload-only Archon App Lite release.
+        private const string CLIENT_VERSION = "9.4.36";
         private const int PARSER_VERSION = 2075;
         private const int MaxRetries = 3;
 
         private readonly string _baseUrl;
         private readonly CookieContainer _cookies;
         private readonly ParserEngine _parser;
+        private ParserEngine _liveParser;
 
         public HttpClient HttpClient { get; }
         public bool IsLoggedIn { get; private set; }
@@ -227,20 +228,22 @@ namespace ACTLogsUploader.Upload
             IsLiveLogging = true;
             LiveFightCount = 0;
             CurrentReportCode = null;
+            var liveParser = new ParserEngine(HttpClient, _baseUrl);
+            _liveParser = liveParser;
 
             _liveLogTask = Task.Run(async () =>
             {
                 string reportCode = null;
                 try
                 {
-                    await _parser.StartLiveLogAsync(logDirectory, regionCode, uploadPreviousFights,
+                    await liveParser.StartLiveLogAsync(logDirectory, regionCode, uploadPreviousFights,
                         async (masterData, fight, segmentId, startTime, endTime) =>
                         {
                             if (reportCode == null)
                             {
                                 reportCode = await CreateReportAsync("live.log", description, visibility, serverOrRegion, guildId).ConfigureAwait(false);
                                 CurrentReportCode = reportCode;
-                                _parser.SetReportCode(reportCode);
+                                liveParser.SetReportCode(reportCode);
                             }
                             await WithRetryAsync(() => UploadMasterTableAsync(reportCode, masterData, segmentId)).ConfigureAwait(false);
                             await WithRetryAsync(() => UploadSegmentAsync(reportCode, fight, segmentId, startTime, endTime, true)).ConfigureAwait(false);
@@ -251,6 +254,9 @@ namespace ACTLogsUploader.Upload
                 catch (Exception ex) { PluginLog.Error("[LiveLog] Error", ex); }
                 finally
                 {
+                    liveParser.Dispose();
+                    if (ReferenceEquals(_liveParser, liveParser))
+                        _liveParser = null;
                     if (reportCode != null)
                     {
                         await TerminateReportAsync(reportCode).ConfigureAwait(false);
@@ -414,6 +420,7 @@ namespace ACTLogsUploader.Upload
         public void Dispose()
         {
             try { _liveLogCts?.Cancel(); } catch { }
+            try { _liveParser?.Dispose(); } catch { }
             try { _parser?.Dispose(); } catch { }
             try { HttpClient?.Dispose(); } catch { }
         }
