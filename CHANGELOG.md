@@ -3,6 +3,11 @@
 Versioning follows `MAJOR.MINOR.PATCH`. The release version is set by `<Version>` in
 `ACTLogsUploader.csproj` and tagged `vX.Y.Z`; each tag has a GitHub release with the build output.
 
+## 0.3.4
+
+- Read manual and live logs in Archon-style bounded batches.
+- Upload and clear completed fights incrementally to cap parser IPC and memory use.
+
 ## 0.3.3
 
 - Resolve ClearScript dependencies when ACT loads the plugin assembly from memory.

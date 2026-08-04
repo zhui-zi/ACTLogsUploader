@@ -67,6 +67,18 @@ namespace ACTLogsUploader.Upload
             }
         }
 
+        public sealed class IncrementalUploadResult
+        {
+            public string ReportCode { get; }
+            public int FightCount { get; }
+
+            public IncrementalUploadResult(string reportCode, int fightCount)
+            {
+                ReportCode = reportCode;
+                FightCount = fightCount;
+            }
+        }
+
         public void Dispose()
         {
             if (_disposed) return;
@@ -356,13 +368,9 @@ namespace ACTLogsUploader.Upload
             try
             {
                 PluginLog.Info($"[Parser] Processing log: {Path.GetFileName(logPath)}");
-                var lines = await LogFileHelper.ReadAllLinesSharedAsync(logPath).ConfigureAwait(false);
-                PluginLog.Debug($"[Parser] Read {lines.Length} lines");
-
-                var lineList = new List<string>(lines);
-
                 long? startDateMs = null;
-                foreach (var line in lines)
+                var firstBatch = await LogFileHelper.ReadBatchSharedAsync(logPath, 0).ConfigureAwait(false);
+                foreach (var line in firstBatch.Lines)
                 {
                     var t = TryParseLineTime(line);
                     if (t.HasValue) { startDateMs = t.Value.ToUnixTimeMilliseconds(); break; }
@@ -372,7 +380,7 @@ namespace ACTLogsUploader.Upload
                 SendMessage(new { message = "set-report-code", id = 0, reportCode });
                 if (startDateMs.HasValue) SendSetStartDate(startDateMs.Value);
 
-                await Task.Run(() => SendParseLines(lineList, regionCode, 0, true, Array.Empty<object>())).ConfigureAwait(false);
+                await ParseFileInBatchesAsync(logPath, regionCode, true, Array.Empty<object>()).ConfigureAwait(false);
 
                 var scannedResponses = SendMessageAndCollect(new { message = "collect-scanned-raids", id = 1 });
                 var scannedRaidsElement = FindResponseByChannel(scannedResponses, "collect-scanned-raids-completed");
@@ -404,16 +412,7 @@ namespace ACTLogsUploader.Upload
                     using (var raidsDoc = JsonDocument.Parse(raidsToUploadJson))
                     {
                         var raidsElement = raidsDoc.RootElement.Clone();
-                        await Task.Run(() => SendMessage(new
-                        {
-                            message = "parse-lines",
-                            id = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                            lines = lineList,
-                            scanning = false,
-                            selectedRegion = regionCode,
-                            raidsToUpload = raidsElement,
-                            logFilePosition = 0L
-                        })).ConfigureAwait(false);
+                        await ParseFileInBatchesAsync(logPath, regionCode, false, raidsElement).ConfigureAwait(false);
                     }
 
                     var fightsResponses = SendMessageAndCollect(new
@@ -483,6 +482,60 @@ namespace ACTLogsUploader.Upload
             return uploads;
         }
 
+        // Normal manual uploads follow Archon App Lite's one-pass flow: read a bounded part,
+        // parse it, upload committed fights, then clear those fights before reading more.
+        public async Task<IncrementalUploadResult> ProcessAndUploadLogAsync(
+            string logPath,
+            string regionCode,
+            Func<int, Task<string>> createReport,
+            Func<string, FightData, int, long, long, Task> onFightComplete)
+        {
+            await StartParserAsync().ConfigureAwait(false);
+            try
+            {
+                var reportCode = await createReport(ParserVersion).ConfigureAwait(false);
+                SetReportCode(reportCode);
+
+                var firstBatch = await LogFileHelper.ReadBatchSharedAsync(logPath, 0).ConfigureAwait(false);
+                foreach (var line in firstBatch.Lines)
+                {
+                    var t = TryParseLineTime(line);
+                    if (!t.HasValue) continue;
+                    SendSetStartDate(t.Value.ToUnixTimeMilliseconds());
+                    break;
+                }
+
+                long position = 0;
+                int nextSegmentId = 1;
+                while (true)
+                {
+                    var batch = await LogFileHelper.ReadBatchSharedAsync(logPath, position).ConfigureAwait(false);
+                    if (batch.Lines.Count > 0)
+                    {
+                        SendParseLines(logPath, batch, regionCode);
+                        position = batch.CurrentPosition;
+                    }
+
+                    nextSegmentId = await DrainCompletedFightsAsync(
+                        nextSegmentId,
+                        onFightComplete,
+                        batch.EndOfFile,
+                        "Manual").ConfigureAwait(false);
+
+                    if (batch.EndOfFile) break;
+                    if (batch.CurrentPosition <= position && batch.Lines.Count == 0)
+                        throw new InvalidDataException("Log reader made no progress before the end of the file.");
+                    position = batch.CurrentPosition;
+                }
+
+                return new IncrementalUploadResult(reportCode, nextSegmentId - 1);
+            }
+            finally
+            {
+                StopParser();
+            }
+        }
+
         private string BuildMasterTableString(JsonElement? fightsData, JsonElement masterData)
         {
             var sb = new StringBuilder();
@@ -543,21 +596,119 @@ namespace ACTLogsUploader.Upload
             return long.TryParse(eventsString.Substring(lineStart, pipe - lineStart), out lastRelativeMs);
         }
 
-        private void SendParseLines(List<string> lines, string regionCode, long position)
-            => SendParseLines(lines, regionCode, position, false, Array.Empty<object>());
+        private async Task ParseFileInBatchesAsync(string logPath, string regionCode, bool scanning, object raidsToUpload)
+        {
+            long position = 0;
+            long lineCount = 0;
+            while (true)
+            {
+                var batch = await LogFileHelper.ReadBatchSharedAsync(logPath, position).ConfigureAwait(false);
+                if (batch.Lines.Count > 0)
+                {
+                    SendParseLines(logPath, batch, regionCode, scanning, raidsToUpload);
+                    lineCount += batch.Lines.Count;
+                }
 
-        private void SendParseLines(List<string> lines, string regionCode, long position, bool scanning, object raidsToUpload)
+                if (batch.EndOfFile) break;
+                if (batch.CurrentPosition <= position)
+                    throw new InvalidDataException("Log reader made no progress before the end of the file.");
+                position = batch.CurrentPosition;
+            }
+            PluginLog.Debug($"[Parser] Parsed {lineCount} line(s) in bounded batches");
+        }
+
+        private void SendParseLines(
+            string logPath,
+            LogFileHelper.LogFileBatch batch,
+            string regionCode,
+            bool scanning = false,
+            object raidsToUpload = null)
         {
             SendMessage(new
             {
                 message = "parse-lines",
                 id = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                lines,
+                lines = batch.Lines,
                 scanning,
                 selectedRegion = regionCode,
-                raidsToUpload,
-                logFilePosition = position
+                raidsToUpload = raidsToUpload ?? Array.Empty<object>(),
+                logFilePosition = new
+                {
+                    filePath = logPath,
+                    startingPosition = batch.StartingPosition,
+                    currentPosition = batch.CurrentPosition
+                }
             });
+        }
+
+        private async Task<long> ParseAvailableLogBatchesAsync(
+            string logPath,
+            long position,
+            string regionCode,
+            bool scanning,
+            object raidsToUpload,
+            Func<LogFileHelper.LogFileBatch, Task> afterParse,
+            CancellationToken cancellationToken)
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var previousPosition = position;
+                var batch = await LogFileHelper.ReadBatchSharedAsync(logPath, position).ConfigureAwait(false);
+                if (batch.Lines.Count > 0)
+                {
+                    SendParseLines(logPath, batch, regionCode, scanning, raidsToUpload);
+                    position = batch.CurrentPosition;
+                    if (afterParse != null)
+                        await afterParse(batch).ConfigureAwait(false);
+                }
+
+                if (batch.EndOfFile) return position;
+                if (batch.CurrentPosition <= previousPosition)
+                    throw new InvalidDataException("Log reader made no progress before the end of the file.");
+                position = batch.CurrentPosition;
+            }
+        }
+
+        private async Task<long> FindLastFfxivHeaderResetPositionAsync(
+            string logPath,
+            CancellationToken cancellationToken)
+        {
+            long position = 0;
+            long lastResetPosition = 0;
+            bool foundReset = false;
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var batch = await LogFileHelper.ReadBatchSharedAsync(logPath, position).ConfigureAwait(false);
+                for (var i = 0; i < batch.Lines.Count; i++)
+                {
+                    if (!batch.Lines[i].StartsWith("253|", StringComparison.Ordinal)) continue;
+
+                    if (i == 0)
+                    {
+                        lastResetPosition = batch.StartingPosition;
+                    }
+                    else
+                    {
+                        var prefix = await LogFileHelper.ReadBatchSharedAsync(
+                            logPath,
+                            batch.StartingPosition,
+                            i,
+                            LogFileHelper.DefaultBatchByteCount).ConfigureAwait(false);
+                        lastResetPosition = prefix.CurrentPosition;
+                    }
+                    foundReset = true;
+                }
+
+                if (batch.EndOfFile) break;
+                if (batch.CurrentPosition <= position)
+                    throw new InvalidDataException("Log reader made no progress while finding the last header reset.");
+                position = batch.CurrentPosition;
+            }
+
+            return foundReset ? lastResetPosition : 0;
         }
 
         private void SendCallWipe() => SendMessage(new { message = "call-wipe", id = 0 });
@@ -626,57 +777,54 @@ namespace ACTLogsUploader.Upload
                 string logPath = files.OrderByDescending(f => File.GetLastWriteTimeUtc(f)).First();
                 PluginLog.Info($"[LiveLog] Monitoring: {Path.GetFileName(logPath)}");
 
-                int lastFightCount = 0;
+                int nextSegmentId = 1;
                 DateTime lastFileCheckTime = DateTime.UtcNow;
                 bool checkPending = false;
                 long lastPosition = 0;
-                bool firstPass = true;
                 bool fightEndDetected = false;
                 DateTime fightEndDetectedTime = DateTime.MinValue;
 
+                var firstBatch = await LogFileHelper.ReadBatchSharedAsync(logPath, 0).ConfigureAwait(false);
+                long? firstLineMs = null;
+                foreach (var line in firstBatch.Lines)
+                {
+                    var t = TryParseLineTime(line);
+                    if (t.HasValue) { firstLineMs = t.Value.ToUnixTimeMilliseconds(); break; }
+                }
+                if (firstLineMs.HasValue) SendSetStartDate(firstLineMs.Value);
+
                 if (uploadPreviousFights)
                 {
-                    var (existingLines, endPos) = await LogFileHelper.ReadNewLinesSharedAsync(logPath, 0).ConfigureAwait(false);
-                    lastPosition = endPos;
-                    if (existingLines.Count > 0)
-                    {
-                        foreach (var line in existingLines)
+                    if (firstLineMs.HasValue) SendSetLiveLoggingStartTime(firstLineMs.Value);
+                    PluginLog.Info("[LiveLog] Reading existing lines in bounded batches");
+                    lastPosition = await ParseAvailableLogBatchesAsync(
+                        logPath,
+                        0,
+                        regionCode,
+                        false,
+                        Array.Empty<object>(),
+                        async batch =>
                         {
-                            var t = TryParseLineTime(line);
-                            if (t.HasValue)
-                            {
-                                var liveStartMs = t.Value.ToUnixTimeMilliseconds();
-                                SendSetStartDate(liveStartMs);
-                                SendSetLiveLoggingStartTime(liveStartMs);
-                                break;
-                            }
-                        }
-                        PluginLog.Info($"[LiveLog] Sending {existingLines.Count} existing lines for context");
-                        await Task.Run(() => SendParseLines(existingLines, regionCode, 0), cancellationToken).ConfigureAwait(false);
-                    }
+                            nextSegmentId = await DrainCompletedFightsAsync(
+                                nextSegmentId, onFightComplete, false, "LiveLog").ConfigureAwait(false);
+                        },
+                        cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
-                    var (existingLines, endPos) = await LogFileHelper.ReadNewLinesSharedAsync(logPath, 0).ConfigureAwait(false);
-                    lastPosition = endPos;
-
-                    long? firstLineMs = null;
-                    foreach (var line in existingLines)
-                    {
-                        var t = TryParseLineTime(line);
-                        if (t.HasValue) { firstLineMs = t.Value.ToUnixTimeMilliseconds(); break; }
-                    }
-                    if (firstLineMs.HasValue) SendSetStartDate(firstLineMs.Value);
-
                     var anchorMs = TryReadLatestTimestampFromFile(logPath) ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     SendSetLiveLoggingStartTime(anchorMs);
-
-                    if (existingLines.Count > 0)
-                    {
-                        PluginLog.Info($"[LiveLog] Scanning {existingLines.Count} historical line(s) for context");
-                        await Task.Run(() => SendParseLines(existingLines, regionCode, 0, true, Array.Empty<object>()), cancellationToken).ConfigureAwait(false);
-                    }
-                    firstPass = false;
+                    var contextPosition = await FindLastFfxivHeaderResetPositionAsync(
+                        logPath, cancellationToken).ConfigureAwait(false);
+                    PluginLog.Info($"[LiveLog] Reading context from the last header reset at byte {contextPosition}");
+                    lastPosition = await ParseAvailableLogBatchesAsync(
+                        logPath,
+                        contextPosition,
+                        regionCode,
+                        false,
+                        Array.Empty<object>(),
+                        null,
+                        cancellationToken).ConfigureAwait(false);
                 }
 
                 bool livePhaseReady = false;
@@ -685,16 +833,24 @@ namespace ACTLogsUploader.Upload
                 {
                     try
                     {
-                        long batchStartPosition = lastPosition;
-                        var (newLines, newPosition) = await LogFileHelper.ReadNewLinesSharedAsync(logPath, lastPosition).ConfigureAwait(false);
-                        lastPosition = newPosition;
+                        var positionBeforeRead = lastPosition;
+                        lastPosition = await ParseAvailableLogBatchesAsync(
+                            logPath,
+                            lastPosition,
+                            regionCode,
+                            false,
+                            Array.Empty<object>(),
+                            batch =>
+                            {
+                                foreach (var line in batch.Lines)
+                                    HandleDirectorLine(line, ref fightEndDetected, ref fightEndDetectedTime, livePhaseReady);
+                                return Task.CompletedTask;
+                            },
+                            cancellationToken).ConfigureAwait(false);
 
-                        if (newLines.Count > 0)
+                        if (lastPosition > positionBeforeRead)
                         {
                             checkPending = false;
-                            SendParseLines(newLines, regionCode, batchStartPosition);
-                            foreach (var line in newLines)
-                                HandleDirectorLine(line, ref fightEndDetected, ref fightEndDetectedTime, livePhaseReady);
                         }
                         else if (!livePhaseReady)
                         {
@@ -711,9 +867,14 @@ namespace ACTLogsUploader.Upload
                                 var newestFile = currentFiles.OrderByDescending(f => File.GetLastWriteTimeUtc(f)).First();
                                 if (newestFile != logPath)
                                 {
-                                    var (remainingLines, _) = await LogFileHelper.ReadNewLinesSharedAsync(logPath, lastPosition).ConfigureAwait(false);
-                                    if (remainingLines.Count > 0)
-                                        SendParseLines(remainingLines, regionCode, lastPosition);
+                                    lastPosition = await ParseAvailableLogBatchesAsync(
+                                        logPath,
+                                        lastPosition,
+                                        regionCode,
+                                        false,
+                                        Array.Empty<object>(),
+                                        null,
+                                        cancellationToken).ConfigureAwait(false);
                                     PluginLog.Info($"[LiveLog] Switching to newer log file: {Path.GetFileName(newestFile)}");
                                     logPath = newestFile;
                                     lastPosition = 0;
@@ -722,15 +883,14 @@ namespace ACTLogsUploader.Upload
                             }
                         }
 
-                        bool forceCheck = firstPass && uploadPreviousFights;
                         bool fightEndCheck = fightEndDetected && (DateTime.UtcNow - fightEndDetectedTime).TotalMilliseconds >= FightEndDelayMs;
 
-                        if ((forceCheck || fightEndCheck) && !checkPending)
+                        if (fightEndCheck && !checkPending)
                         {
-                            if (forceCheck) firstPass = false;
-                            if (fightEndCheck) fightEndDetected = false;
+                            fightEndDetected = false;
                             checkPending = true;
-                            lastFightCount = await CheckForFightsAsync(lastFightCount, onFightComplete, false).ConfigureAwait(false);
+                            nextSegmentId = await DrainCompletedFightsAsync(
+                                nextSegmentId, onFightComplete, false, "LiveLog").ConfigureAwait(false);
                         }
 
                         await Task.Delay(LiveLogPollIntervalMs, cancellationToken).ConfigureAwait(false);
@@ -747,7 +907,11 @@ namespace ACTLogsUploader.Upload
 
                 if (_engine != null)
                 {
-                    try { await CheckForFightsAsync(lastFightCount, onFightComplete, true).ConfigureAwait(false); }
+                    try
+                    {
+                        await DrainCompletedFightsAsync(
+                            nextSegmentId, onFightComplete, true, "LiveLog").ConfigureAwait(false);
+                    }
                     catch (Exception ex) { PluginLog.Error("[LiveLog] Error in final check", ex); }
                 }
             }
@@ -782,7 +946,11 @@ namespace ACTLogsUploader.Upload
             }
         }
 
-        private async Task<int> CheckForFightsAsync(int lastFightCount, Func<string, FightData, int, long, long, Task> onFightComplete, bool pushFightIfNeeded)
+        private async Task<int> DrainCompletedFightsAsync(
+            int nextSegmentId,
+            Func<string, FightData, int, long, long, Task> onFightComplete,
+            bool pushFightIfNeeded,
+            string context)
         {
             var fightsResponses = SendMessageAndCollect(new
             {
@@ -796,9 +964,9 @@ namespace ACTLogsUploader.Upload
             if (fightsResult.HasValue && fightsResult.Value.TryGetProperty("fights", out var fightsArray))
             {
                 var currentCount = fightsArray.GetArrayLength();
-                if (currentCount > lastFightCount)
+                if (currentCount > 0)
                 {
-                    PluginLog.Info($"[LiveLog] {currentCount - lastFightCount} NEW fight(s) detected!");
+                    PluginLog.Info($"[{context}] {currentCount} new fight(s) detected");
 
                     object masterMsg = _currentReportCode != null
                         ? new { message = "collect-master-info", id = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), reportCode = _currentReportCode }
@@ -814,35 +982,41 @@ namespace ACTLogsUploader.Upload
                         var gameVer = fr.TryGetProperty("gameVersion", out var gvProp) ? gvProp.GetInt32() : 1;
                         var masterStr = BuildMasterTableString(fightsResult, masterResult.Value);
 
-                        int i = 0;
                         foreach (var fight in fightsArray.EnumerateArray())
                         {
-                            if (i >= lastFightCount)
+                            var eventsStr = fight.TryGetProperty("eventsString", out var ev) ? ev.GetString() ?? "" : "";
+                            if (!TryGetLastEventRelativeTime(eventsStr, out long lastRel))
                             {
-                                var eventsStr = fight.TryGetProperty("eventsString", out var ev) ? ev.GetString() ?? "" : "";
-                                if (!TryGetLastEventRelativeTime(eventsStr, out long lastRel)) { i++; continue; }
-                                long fightEndTime = globalStartTime + lastRel;
-                                var fightData = new FightData
-                                {
-                                    Name = fight.TryGetProperty("name", out var n) ? n.GetString() ?? "Unknown" : "Unknown",
-                                    StartTime = fight.TryGetProperty("startTime", out var s) ? s.GetInt64() : 0,
-                                    EndTime = fight.TryGetProperty("endTime", out var e) ? e.GetInt64() : 0,
-                                    EventsString = eventsStr,
-                                    EventCount = fight.TryGetProperty("eventCount", out var ec) && ec.ValueKind == JsonValueKind.Number ? ec.GetInt32() : 0,
-                                    LogVersion = logVer,
-                                    GameVersion = gameVer
-                                };
-                                PluginLog.Info($"[LiveLog] Uploading: {fightData.Name} (segment {i + 1})");
-                                await onFightComplete(masterStr, fightData, i + 1, globalStartTime, fightEndTime).ConfigureAwait(false);
+                                PluginLog.Warn($"[{context}] Skipping a fight with no valid final event time");
+                                continue;
                             }
-                            i++;
+
+                            long fightEndTime = globalStartTime + lastRel;
+                            var fightData = new FightData
+                            {
+                                Name = fight.TryGetProperty("name", out var n) ? n.GetString() ?? "Unknown" : "Unknown",
+                                StartTime = fight.TryGetProperty("startTime", out var s) ? s.GetInt64() : 0,
+                                EndTime = fight.TryGetProperty("endTime", out var e) ? e.GetInt64() : 0,
+                                EventsString = eventsStr,
+                                EventCount = fight.TryGetProperty("eventCount", out var ec) && ec.ValueKind == JsonValueKind.Number ? ec.GetInt32() : 0,
+                                LogVersion = logVer,
+                                GameVersion = gameVer
+                            };
+                            PluginLog.Info($"[{context}] Uploading: {fightData.Name} (segment {nextSegmentId})");
+                            await onFightComplete(
+                                masterStr, fightData, nextSegmentId, globalStartTime, fightEndTime).ConfigureAwait(false);
+                            nextSegmentId++;
                         }
-                        return currentCount;
+
+                        SendMessageAndCollect(new
+                        {
+                            message = "clear-fights",
+                            id = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                        });
                     }
                 }
-                return currentCount > lastFightCount ? currentCount : lastFightCount;
             }
-            return lastFightCount;
+            return nextSegmentId;
         }
 
         // Exposed to JS for IPC capture (__ipc.capture).

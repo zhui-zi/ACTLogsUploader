@@ -220,10 +220,47 @@ namespace ACTLogsUploader.Upload
 
         public async Task<string> UploadLogAsync(string logPath, int serverOrRegion, string regionCode, int visibility, string guildId, string description)
         {
-            var uploads = await PrepareUploadsAsync(logPath, regionCode).ConfigureAwait(false);
-            if (uploads.Count == 0)
+            var fileName = Path.GetFileName(logPath);
+            ParserEngine.IncrementalUploadResult result = null;
+            string reportCode = null;
+            try
+            {
+                result = await _parser.ProcessAndUploadLogAsync(
+                    logPath,
+                    regionCode,
+                    async parserVersion =>
+                    {
+                        reportCode = await CreateReportAsync(
+                            fileName,
+                            description,
+                            visibility,
+                            serverOrRegion,
+                            guildId,
+                            parserVersion,
+                            2).ConfigureAwait(false);
+                        return reportCode;
+                    },
+                    async (masterTable, fight, segmentId, startTime, endTime) =>
+                    {
+                        await WithRetryAsync(() => UploadMasterTableAsync(
+                            reportCode, masterTable, segmentId)).ConfigureAwait(false);
+                        await WithRetryAsync(() => UploadSegmentAsync(
+                            reportCode, fight, segmentId, startTime, endTime, false)).ConfigureAwait(false);
+                    }).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(reportCode))
+                    await TerminateReportAsync(reportCode).ConfigureAwait(false);
+            }
+
+            if (result == null)
+                throw new Exception("Upload did not produce a result.");
+            if (result.FightCount == 0)
                 throw new Exception("Parser produced no fights - nothing to upload.");
-            return await UploadPreparedAsync(Path.GetFileName(logPath), uploads, serverOrRegion, visibility, guildId, description).ConfigureAwait(false);
+
+            PluginLog.Info($"Upload complete: {result.ReportCode}");
+            return result.ReportCode;
         }
 
         public void StartLiveLog(string logDirectory, int serverOrRegion, string regionCode, int visibility, string guildId, string description, bool uploadPreviousFights)
