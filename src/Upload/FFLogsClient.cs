@@ -34,7 +34,7 @@ namespace ACTLogsUploader.Upload
     {
         // The server gates report creation on client version, rejecting old ones with a 400 that
         // points users to the Archon App. Match the upload-only Archon App Lite release.
-        private const string CLIENT_VERSION = "9.4.36";
+        private const string CLIENT_VERSION = "9.5.0";
         private const int MaxRetries = 3;
 
         private readonly string _baseUrl;

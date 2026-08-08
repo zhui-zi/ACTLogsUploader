@@ -3,6 +3,10 @@
 Versioning follows `MAJOR.MINOR.PATCH`. The release version is set by `<Version>` in
 `ACTLogsUploader.csproj` and tagged `vX.Y.Z`; each tag has a GitHub release with the build output.
 
+## 0.3.5
+
+- Match Archon App Lite 9.5.0 for desktop-client login.
+
 ## 0.3.4
 
 - Read manual and live logs in Archon-style bounded batches.
