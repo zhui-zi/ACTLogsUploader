@@ -1,0 +1,4 @@
+ACTLogsUploader includes code derived from FFLogsUploader:
+https://github.com/Robert5204/FFLogsUploader
+
+The upstream project declares the MIT license in FFLogsPlugin.csproj.

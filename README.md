@@ -76,3 +76,7 @@ Auto actions run on a 6-hour timer and are off by default.
 
 Unofficial. Reimplements an undocumented protocol and may break when FF Logs changes it, and
 may conflict with the FF Logs Terms of Service. Use at your own risk.
+
+## License
+
+MIT. See [NOTICE](NOTICE) for attribution.
